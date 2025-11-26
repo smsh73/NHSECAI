@@ -1,0 +1,27 @@
+# Kustomization file for easier deployment management
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: default
+
+resources:
+  - namespace.yaml
+  - configmap.yaml
+  # - secret.yaml  # Uncomment if using file-based secrets (not recommended)
+  - deployment.yaml
+  - service.yaml
+  - hpa.yaml
+  # - ingress.yaml  # Uncomment if using Ingress
+  # - azure-keyvault-secret-provider.yaml  # Uncomment if using Azure Key Vault
+
+# Common labels for all resources
+commonLabels:
+  app.kubernetes.io/name: financial-analysis
+  app.kubernetes.io/component: backend
+  app.kubernetes.io/part-of: financial-platform
+
+# Images to be replaced
+images:
+  - name: financial-analysis
+    newName: <your-acr-name>.azurecr.io/financial-analysis
+    newTag: latest

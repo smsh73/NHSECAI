@@ -1,0 +1,862 @@
+import { useState, useEffect } from "react";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Progress } from "@/components/ui/progress";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { apiRequest } from "@/lib/queryClient";
+import { useToast } from "@/hooks/use-toast";
+import { useWebSocket } from "@/hooks/use-websocket";
+import { 
+  MajorEvents, 
+  QuantitativeMetrics, 
+  IndustryThemeConditions, 
+  MacroMarketConditions 
+} from "@shared/schema";
+import { 
+  Play, 
+  Square, 
+  BarChart3, 
+  TrendingUp, 
+  FileText, 
+  Globe, 
+  AlertCircle, 
+  CheckCircle, 
+  Clock, 
+  Activity 
+} from "lucide-react";
+
+interface WorkflowStatus {
+  lastUpdate: string;
+  stageA: {
+    majorEventsCount: number;
+    lastEvent: any;
+  };
+  stageB: {
+    metricsCount: number;
+    anomalyCounts: {
+      high: number;
+      medium: number;
+      low: number;
+    };
+  };
+  stageC: {
+    themeConditionsCount: number;
+    newConditionsCount: number;
+  };
+  stageD: {
+    macroConditionsCount: number;
+    lastMacroCondition: any;
+  };
+}
+
+interface StageExecutionResult {
+  success: boolean;
+  data?: any;
+  error?: string;
+}
+
+export default function WorkflowMonitor() {
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const { isConnected, subscribe } = useWebSocket();
+  
+  const [currentDateTime, setCurrentDateTime] = useState(new Date());
+  const [executionInProgress, setExecutionInProgress] = useState(false);
+  const [lastExecutionResults, setLastExecutionResults] = useState<{ [key: string]: StageExecutionResult }>({});
+
+  // Update current date/time every minute
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setCurrentDateTime(new Date());
+    }, 60000);
+    return () => clearInterval(interval);
+  }, []);
+
+  // Fetch workflow status
+  const { data: workflowStatus, isLoading: statusLoading, refetch: refetchStatus } = useQuery<WorkflowStatus>({
+    queryKey: ['/api/workflow/status'],
+    refetchInterval: 30000, // Refresh every 30 seconds
+  });
+
+  // WebSocket event subscriptions for real-time updates
+  useEffect(() => {
+    if (!isConnected) return;
+
+    const unsubscribers = [
+      // Stage execution start events
+      subscribe('workflow_stage_start', (data) => {
+        toast({
+          title: `${data.stage}단계 실행 시작`,
+          description: `${data.stage}단계 워크플로우가 시작되었습니다.`,
+        });
+      }),
+
+      // Stage execution complete events
+      subscribe('workflow_stage_complete', (data) => {
+        const stageKey = `stage${data.stage}`;
+        setLastExecutionResults(prev => ({ 
+          ...prev, 
+          [stageKey]: { success: true, data: data.results } 
+        }));
+        
+        toast({
+          title: `${data.stage}단계 실행 완료`,
+          description: `${data.stage}단계 워크플로우가 성공적으로 완료되었습니다.`,
+        });
+        
+        // Refetch status to update UI
+        refetchStatus();
+      }),
+
+      // Stage execution error events
+      subscribe('workflow_stage_error', (data) => {
+        const stageKey = `stage${data.stage}`;
+        setLastExecutionResults(prev => ({ 
+          ...prev, 
+          [stageKey]: { success: false, error: data.error } 
+        }));
+        
+        toast({
+          title: `${data.stage}단계 실행 실패`,
+          description: data.error || `${data.stage}단계 실행 중 오류가 발생했습니다.`,
+          variant: "destructive",
+        });
+      }),
+
+      // Full pipeline events
+      subscribe('workflow_pipeline_start', (data) => {
+        setExecutionInProgress(true);
+        setLastExecutionResults({});
+        
+        toast({
+          title: "전체 파이프라인 실행 시작",
+          description: "4단계 워크플로우 파이프라인이 시작되었습니다.",
+        });
+      }),
+
+      subscribe('workflow_pipeline_complete', (data) => {
+        setExecutionInProgress(false);
+        setLastExecutionResults({
+          stageA: { success: true, data: data.stageAResults },
+          stageB: { success: true, data: data.stageBResults },
+          stageC: { success: true, data: data.stageCResults },
+          stageD: { success: true, data: data.stageDResults },
+        });
+        
+        toast({
+          title: "전체 파이프라인 실행 완료",
+          description: "4단계 워크플로우가 성공적으로 완료되었습니다.",
+        });
+        
+        refetchStatus();
+      }),
+
+      subscribe('workflow_pipeline_error', (data) => {
+        setExecutionInProgress(false);
+        
+        toast({
+          title: "전체 파이프라인 실행 실패",
+          description: data.error || "워크플로우 실행 중 오류가 발생했습니다.",
+          variant: "destructive",
+        });
+      }),
+    ];
+
+    return () => {
+      unsubscribers.forEach(unsub => unsub());
+    };
+  }, [isConnected, subscribe, toast, refetchStatus]);
+
+  // Fetch recent major events
+  const { data: majorEvents } = useQuery<MajorEvents[]>({
+    queryKey: ['/api/major-events'],
+    refetchInterval: 30000,
+  });
+
+  // Fetch recent quantitative metrics
+  const { data: quantMetrics } = useQuery<QuantitativeMetrics[]>({
+    queryKey: ['/api/quantitative-metrics'],
+    refetchInterval: 30000,
+  });
+
+  // Fetch recent theme conditions
+  const { data: themeConditions } = useQuery<IndustryThemeConditions[]>({
+    queryKey: ['/api/industry-theme-conditions'],
+    refetchInterval: 30000,
+  });
+
+  // Fetch recent macro conditions
+  const { data: macroConditions } = useQuery<MacroMarketConditions[]>({
+    queryKey: ['/api/macro-market-conditions'],
+    refetchInterval: 30000,
+  });
+
+  // Stage execution mutations
+  const stageAMutation = useMutation({
+    mutationFn: async (params: { eventDate: string; eventTime: string }) => {
+      const response = await apiRequest('POST', '/api/workflow/execute-stage-a', params);
+      return response.json();
+    },
+    onSuccess: (data) => {
+      setLastExecutionResults(prev => ({ ...prev, stageA: { success: true, data } }));
+      toast({
+        title: "A단계 실행 완료",
+        description: `${data.majorEvents?.length || 0}개의 주요이벤트가 생성되었습니다.`,
+      });
+      refetchStatus();
+    },
+    onError: (error) => {
+      setLastExecutionResults(prev => ({ ...prev, stageA: { success: false, error: error.message } }));
+      toast({
+        title: "A단계 실행 실패",
+        description: "뉴스 이슈 생성 중 오류가 발생했습니다.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const stageBMutation = useMutation({
+    mutationFn: async (params: { metricDate: string; metricTime: string }) => {
+      const response = await apiRequest('POST', '/api/workflow/execute-stage-b', params);
+      return response.json();
+    },
+    onSuccess: (data) => {
+      setLastExecutionResults(prev => ({ ...prev, stageB: { success: true, data } }));
+      toast({
+        title: "B단계 실행 완료",
+        description: `${data?.length || 0}개의 정량적 지표가 생성되었습니다.`,
+      });
+      refetchStatus();
+    },
+    onError: (error) => {
+      setLastExecutionResults(prev => ({ ...prev, stageB: { success: false, error: error.message } }));
+      toast({
+        title: "B단계 실행 실패",
+        description: "정량적 시장 수치 산출 중 오류가 발생했습니다.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const stageCMutation = useMutation({
+    mutationFn: async (params: { newsDate: string; newsTime: string }) => {
+      const response = await apiRequest('POST', '/api/workflow/execute-stage-c', params);
+      return response.json();
+    },
+    onSuccess: (data) => {
+      setLastExecutionResults(prev => ({ ...prev, stageC: { success: true, data } }));
+      toast({
+        title: "C단계 실행 완료",
+        description: `${data.themeConditions?.length || 0}개의 테마 시황이 생성되었습니다.`,
+      });
+      refetchStatus();
+    },
+    onError: (error) => {
+      setLastExecutionResults(prev => ({ ...prev, stageC: { success: false, error: error.message } }));
+      toast({
+        title: "C단계 실행 실패",
+        description: "테마 + 산업 시황 생성 중 오류가 발생했습니다.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const stageDMutation = useMutation({
+    mutationFn: async (params: { analysisDate: string; analysisTime: string; stageAIds: string[]; stageBIds: string[]; stageCIds: string[] }) => {
+      const response = await apiRequest('POST', '/api/workflow/execute-stage-d', params);
+      return response.json();
+    },
+    onSuccess: (data) => {
+      setLastExecutionResults(prev => ({ ...prev, stageD: { success: true, data } }));
+      toast({
+        title: "D단계 실행 완료",
+        description: "매크로 시황 통합이 완료되었습니다.",
+      });
+      refetchStatus();
+    },
+    onError: (error) => {
+      setLastExecutionResults(prev => ({ ...prev, stageD: { success: false, error: error.message } }));
+      toast({
+        title: "D단계 실행 실패",
+        description: "매크로 시황 통합 중 오류가 발생했습니다.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Full pipeline execution
+  const fullPipelineMutation = useMutation({
+    mutationFn: async (params: { targetDate: string; targetTime: string }) => {
+      const response = await apiRequest('POST', '/api/workflow/execute-full-pipeline', params);
+      return response.json();
+    },
+    onSuccess: (data) => {
+      setLastExecutionResults({
+        stageA: { success: true, data: data.stageA },
+        stageB: { success: true, data: data.stageB },
+        stageC: { success: true, data: data.stageC },
+        stageD: { success: true, data: data.stageD },
+      });
+      toast({
+        title: "전체 파이프라인 실행 완료",
+        description: "4단계 워크플로우가 성공적으로 완료되었습니다.",
+      });
+      refetchStatus();
+      setExecutionInProgress(false);
+    },
+    onError: (error) => {
+      toast({
+        title: "전체 파이프라인 실행 실패",
+        description: "워크플로우 실행 중 오류가 발생했습니다.",
+        variant: "destructive",
+      });
+      setExecutionInProgress(false);
+    },
+  });
+
+  const executeStage = (stage: string) => {
+    const currentDate = currentDateTime.toISOString().split('T')[0];
+    const currentTime = currentDateTime.toTimeString().split(' ')[0].substring(0, 5);
+
+    switch (stage) {
+      case 'A':
+        stageAMutation.mutate({ eventDate: currentDate, eventTime: currentTime });
+        break;
+      case 'B':
+        stageBMutation.mutate({ metricDate: currentDate, metricTime: currentTime });
+        break;
+      case 'C':
+        stageCMutation.mutate({ newsDate: currentDate, newsTime: currentTime });
+        break;
+      case 'D':
+        // Get IDs from previous stages for integration
+        const stageAIds = (majorEvents && Array.isArray(majorEvents)) ? majorEvents.slice(0, 5).map((e) => e.id) : [];
+        const stageBIds = (quantMetrics && Array.isArray(quantMetrics)) ? quantMetrics.slice(0, 5).map((m) => m.id) : [];
+        const stageCIds = (themeConditions && Array.isArray(themeConditions)) ? themeConditions.slice(0, 5).map((c) => c.id) : [];
+        stageDMutation.mutate({ 
+          analysisDate: currentDate, 
+          analysisTime: currentTime,
+          stageAIds,
+          stageBIds,
+          stageCIds
+        });
+        break;
+    }
+  };
+
+  const executeFullPipeline = () => {
+    setExecutionInProgress(true);
+    const currentDate = currentDateTime.toISOString().split('T')[0];
+    const currentTime = currentDateTime.toTimeString().split(' ')[0].substring(0, 5);
+    fullPipelineMutation.mutate({ targetDate: currentDate, targetTime: currentTime });
+  };
+
+  const getStageStatus = (stage: string) => {
+    const result = lastExecutionResults[`stage${stage}`];
+    if (!result) return 'pending';
+    return result.success ? 'success' : 'error';
+  };
+
+  const getStageIcon = (stage: string) => {
+    const status = getStageStatus(stage);
+    switch (status) {
+      case 'success':
+        return <CheckCircle className="w-4 h-4 text-green-500" />;
+      case 'error':
+        return <AlertCircle className="w-4 h-4 text-red-500" />;
+      default:
+        return <Clock className="w-4 h-4 text-gray-500" />;
+    }
+  };
+
+  const topBarActions = (
+    <div className="flex items-center space-x-2">
+      <Button 
+        onClick={executeFullPipeline}
+        disabled={executionInProgress || fullPipelineMutation.isPending}
+        className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700"
+        data-testid="button-execute-full-pipeline"
+      >
+        {executionInProgress || fullPipelineMutation.isPending ? (
+          <>
+            <Activity className="w-4 h-4 mr-2 animate-spin" />
+            실행 중...
+          </>
+        ) : (
+          <>
+            <Play className="w-4 h-4 mr-2" />
+            전체 파이프라인 실행
+          </>
+        )}
+      </Button>
+      {isConnected && (
+        <Badge variant="outline" className="text-green-600 border-green-600">
+          <div className="w-2 h-2 bg-green-400 rounded-full mr-1 animate-pulse"></div>
+          실시간 연결
+        </Badge>
+      )}
+    </div>
+  );
+
+  return (
+    <div className="flex-1 overflow-hidden">
+      <h1 className="text-3xl font-bold px-6 pt-6 pb-4">4단계 워크플로우 모니터링</h1>
+      {/* Top Bar */}
+      <div className="bg-white dark:bg-gray-900 border-b px-6 py-4">
+        <div className="flex items-center justify-between">
+          {topBarActions}
+        </div>
+      </div>
+      
+      <div className="flex-1 p-6 space-y-6 overflow-y-auto">
+        
+        {/* Current Status Overview */}
+        <Card data-testid="workflow-status-overview">
+          <CardHeader>
+            <CardTitle className="flex items-center space-x-2">
+              <Activity className="w-5 h-5 text-blue-600" />
+              <span>실시간 워크플로우 상태</span>
+              <Badge variant="secondary">
+                {currentDateTime.toLocaleString('ko-KR')}
+              </Badge>
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+              {/* Stage A Status */}
+              <div className="p-4 bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-900/20 dark:to-blue-800/20 rounded-lg border">
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center space-x-2">
+                    <FileText className="w-4 h-4 text-blue-600" />
+                    <span className="font-medium text-sm">A단계: 뉴스 이슈</span>
+                  </div>
+                  {getStageIcon('A')}
+                </div>
+                <div className="text-2xl font-bold text-blue-600">
+                  {workflowStatus?.stageA.majorEventsCount || 0}
+                </div>
+                <div className="text-xs text-muted-foreground">주요이벤트 생성</div>
+                <Button 
+                  size="sm" 
+                  variant="outline" 
+                  className="w-full mt-2"
+                  onClick={() => executeStage('A')}
+                  disabled={stageAMutation.isPending}
+                  data-testid="button-execute-stage-a"
+                >
+                  {stageAMutation.isPending ? '실행 중...' : 'A단계 실행'}
+                </Button>
+              </div>
+
+              {/* Stage B Status */}
+              <div className="p-4 bg-gradient-to-br from-green-50 to-green-100 dark:from-green-900/20 dark:to-green-800/20 rounded-lg border">
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center space-x-2">
+                    <BarChart3 className="w-4 h-4 text-green-600" />
+                    <span className="font-medium text-sm">B단계: 정량 지표</span>
+                  </div>
+                  {getStageIcon('B')}
+                </div>
+                <div className="text-2xl font-bold text-green-600">
+                  {workflowStatus?.stageB.metricsCount || 0}
+                </div>
+                <div className="text-xs text-muted-foreground">
+                  이상도: 고 {workflowStatus?.stageB.anomalyCounts.high || 0} / 
+                  중 {workflowStatus?.stageB.anomalyCounts.medium || 0} / 
+                  저 {workflowStatus?.stageB.anomalyCounts.low || 0}
+                </div>
+                <Button 
+                  size="sm" 
+                  variant="outline" 
+                  className="w-full mt-2"
+                  onClick={() => executeStage('B')}
+                  disabled={stageBMutation.isPending}
+                  data-testid="button-execute-stage-b"
+                >
+                  {stageBMutation.isPending ? '실행 중...' : 'B단계 실행'}
+                </Button>
+              </div>
+
+              {/* Stage C Status */}
+              <div className="p-4 bg-gradient-to-br from-purple-50 to-purple-100 dark:from-purple-900/20 dark:to-purple-800/20 rounded-lg border">
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center space-x-2">
+                    <TrendingUp className="w-4 h-4 text-purple-600" />
+                    <span className="font-medium text-sm">C단계: 테마 분석</span>
+                  </div>
+                  {getStageIcon('C')}
+                </div>
+                <div className="text-2xl font-bold text-purple-600">
+                  {workflowStatus?.stageC.themeConditionsCount || 0}
+                </div>
+                <div className="text-xs text-muted-foreground">
+                  신규: {workflowStatus?.stageC.newConditionsCount || 0}건
+                </div>
+                <Button 
+                  size="sm" 
+                  variant="outline" 
+                  className="w-full mt-2"
+                  onClick={() => executeStage('C')}
+                  disabled={stageCMutation.isPending}
+                  data-testid="button-execute-stage-c"
+                >
+                  {stageCMutation.isPending ? '실행 중...' : 'C단계 실행'}
+                </Button>
+              </div>
+
+              {/* Stage D Status */}
+              <div className="p-4 bg-gradient-to-br from-orange-50 to-orange-100 dark:from-orange-900/20 dark:to-orange-800/20 rounded-lg border">
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center space-x-2">
+                    <Globe className="w-4 h-4 text-orange-600" />
+                    <span className="font-medium text-sm">D단계: 매크로 통합</span>
+                  </div>
+                  {getStageIcon('D')}
+                </div>
+                <div className="text-2xl font-bold text-orange-600">
+                  {workflowStatus?.stageD.macroConditionsCount || 0}
+                </div>
+                <div className="text-xs text-muted-foreground">
+                  {workflowStatus?.stageD.lastMacroCondition?.marketImportanceLevel || '-'} 중요도
+                </div>
+                <Button 
+                  size="sm" 
+                  variant="outline" 
+                  className="w-full mt-2"
+                  onClick={() => executeStage('D')}
+                  disabled={stageDMutation.isPending}
+                  data-testid="button-execute-stage-d"
+                >
+                  {stageDMutation.isPending ? '실행 중...' : 'D단계 실행'}
+                </Button>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Detailed Tabs for Each Stage */}
+        <Tabs defaultValue="overview" className="w-full">
+          <TabsList className="grid w-full grid-cols-5">
+            <TabsTrigger value="overview" data-testid="tab-overview">전체 개요</TabsTrigger>
+            <TabsTrigger value="stage-a" data-testid="tab-stage-a">A단계</TabsTrigger>
+            <TabsTrigger value="stage-b" data-testid="tab-stage-b">B단계</TabsTrigger>
+            <TabsTrigger value="stage-c" data-testid="tab-stage-c">C단계</TabsTrigger>
+            <TabsTrigger value="stage-d" data-testid="tab-stage-d">D단계</TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="overview" className="space-y-4">
+            <Card>
+              <CardHeader>
+                <CardTitle>30분 주기 자동실행 현황</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <Alert>
+                  <Clock className="h-4 w-4" />
+                  <AlertDescription>
+                    워크플로우는 매 30분마다 자동으로 실행됩니다. 
+                    마지막 업데이트: {workflowStatus?.lastUpdate ? new Date(workflowStatus.lastUpdate).toLocaleString('ko-KR') : '정보 없음'}
+                  </AlertDescription>
+                </Alert>
+                
+                <div className="mt-4 space-y-2">
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm font-medium">전체 파이프라인 진행률</span>
+                    <span className="text-sm text-muted-foreground">
+                      {Object.keys(lastExecutionResults).length}/4 단계 완료
+                    </span>
+                  </div>
+                  <Progress value={(Object.keys(lastExecutionResults).length / 4) * 100} className="w-full" />
+                </div>
+              </CardContent>
+            </Card>
+
+            {workflowStatus?.stageD.lastMacroCondition && (
+              <Card>
+                <CardHeader>
+                  <CardTitle>최신 매크로 시황</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-2">
+                    <div className="flex items-center space-x-2">
+                      <Badge variant={
+                        workflowStatus.stageD.lastMacroCondition.marketImportanceLevel === '고' ? 'destructive' :
+                        workflowStatus.stageD.lastMacroCondition.marketImportanceLevel === '중' ? 'default' : 'secondary'
+                      }>
+                        {workflowStatus.stageD.lastMacroCondition.marketImportanceLevel} 중요도
+                      </Badge>
+                      <span className="text-sm text-muted-foreground">
+                        신뢰도: {workflowStatus.stageD.lastMacroCondition.confidenceScore}
+                      </span>
+                    </div>
+                    <p className="text-sm whitespace-pre-line">
+                      {workflowStatus.stageD.lastMacroCondition.summary}
+                    </p>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+          </TabsContent>
+
+          <TabsContent value="stage-a" className="space-y-4">
+            <Card>
+              <CardHeader>
+                <CardTitle>A단계: 뉴스 이슈 생성 (주요이벤트시황)</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-4">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div className="text-center p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
+                      <div className="text-2xl font-bold text-blue-600">{(majorEvents && Array.isArray(majorEvents)) ? majorEvents.length : 0}</div>
+                      <div className="text-sm text-muted-foreground">총 주요이벤트 수</div>
+                    </div>
+                    <div className="text-center p-4 bg-green-50 dark:bg-green-900/20 rounded-lg">
+                      <div className="text-2xl font-bold text-green-600">
+                        {(majorEvents && Array.isArray(majorEvents)) ? majorEvents.filter((e) => e.situationType === '자동생성').length : 0}
+                      </div>
+                      <div className="text-sm text-muted-foreground">AI 생성 이벤트</div>
+                    </div>
+                    <div className="text-center p-4 bg-purple-50 dark:bg-purple-900/20 rounded-lg">
+                      <div className="text-2xl font-bold text-purple-600">
+                        {(majorEvents && Array.isArray(majorEvents)) ? majorEvents.reduce((sum, e) => sum + (e.relatedNewsCount || 0), 0) : 0}
+                      </div>
+                      <div className="text-sm text-muted-foreground">관련 뉴스 총 개수</div>
+                    </div>
+                  </div>
+
+                  {(majorEvents && Array.isArray(majorEvents) && majorEvents.length > 0) && (
+                    <div className="space-y-2">
+                      <h4 className="font-medium">최근 주요이벤트</h4>
+                      {majorEvents.slice(0, 5).map((event, index) => (
+                        <div key={event.id} className="p-3 border rounded-lg bg-muted/50" data-testid={`major-event-${index}`}>
+                          <div className="flex justify-between items-start mb-1">
+                            <span className="font-medium text-sm">{event.majorIssueName}</span>
+                            <Badge variant="outline">{event.situationType}</Badge>
+                          </div>
+                          <p className="text-xs text-muted-foreground mb-2">
+                            {event.majorIssueContent.length > 100 
+                              ? `${event.majorIssueContent.substring(0, 100)}...` 
+                              : event.majorIssueContent}
+                          </p>
+                          <div className="text-xs text-muted-foreground">
+                            {event.eventDate} {event.eventTime} • 관련뉴스 {event.relatedNewsCount}건
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="stage-b" className="space-y-4">
+            <Card>
+              <CardHeader>
+                <CardTitle>B단계: 정량적 시장 수치 산출</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-4">
+                  {workflowStatus?.stageB && (
+                    <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                      <div className="text-center p-4 bg-red-50 dark:bg-red-900/20 rounded-lg">
+                        <div className="text-2xl font-bold text-red-600">{workflowStatus.stageB.anomalyCounts.high}</div>
+                        <div className="text-sm text-muted-foreground">고 이상도</div>
+                      </div>
+                      <div className="text-center p-4 bg-yellow-50 dark:bg-yellow-900/20 rounded-lg">
+                        <div className="text-2xl font-bold text-yellow-600">{workflowStatus.stageB.anomalyCounts.medium}</div>
+                        <div className="text-sm text-muted-foreground">중 이상도</div>
+                      </div>
+                      <div className="text-center p-4 bg-green-50 dark:bg-green-900/20 rounded-lg">
+                        <div className="text-2xl font-bold text-green-600">{workflowStatus.stageB.anomalyCounts.low}</div>
+                        <div className="text-sm text-muted-foreground">저 이상도</div>
+                      </div>
+                      <div className="text-center p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
+                        <div className="text-2xl font-bold text-blue-600">{workflowStatus.stageB.metricsCount}</div>
+                        <div className="text-sm text-muted-foreground">총 지표 수</div>
+                      </div>
+                    </div>
+                  )}
+
+                  {quantMetrics && quantMetrics.length > 0 && (
+                    <div className="space-y-2">
+                      <h4 className="font-medium">최근 정량적 지표</h4>
+                      {quantMetrics.slice(0, 5).map((metric: any, index: number) => (
+                        <div key={metric.id} className="p-3 border rounded-lg bg-muted/50" data-testid={`quant-metric-${index}`}>
+                          <div className="flex justify-between items-start mb-2">
+                            <div className="flex items-center space-x-2">
+                              <span className="font-medium text-sm">{metric.symbol}</span>
+                              <Badge variant="outline">{metric.market}</Badge>
+                            </div>
+                            <Badge variant={
+                              metric.anomalyLevel === '고' ? 'destructive' :
+                              metric.anomalyLevel === '중' ? 'default' : 'secondary'
+                            }>
+                              {metric.anomalyLevel} 이상도
+                            </Badge>
+                          </div>
+                          <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs">
+                            <div>
+                              <span className="text-muted-foreground">현재가: </span>
+                              <span className="font-medium">{metric.currentPrice}</span>
+                            </div>
+                            <div>
+                              <span className="text-muted-foreground">변동률: </span>
+                              <span className={`font-medium ${parseFloat(metric.changeRate) >= 0 ? 'text-red-600' : 'text-blue-600'}`}>
+                                {metric.changeRate}%
+                              </span>
+                            </div>
+                            <div>
+                              <span className="text-muted-foreground">Z-Score: </span>
+                              <span className="font-medium">{metric.zScore}</span>
+                            </div>
+                            <div>
+                              <span className="text-muted-foreground">20일 평균: </span>
+                              <span className="font-medium">{metric.twentyDayAverage}</span>
+                            </div>
+                          </div>
+                          <div className="text-xs text-muted-foreground mt-2">
+                            {metric.metricDate} {metric.metricTime}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="stage-c" className="space-y-4">
+            <Card>
+              <CardHeader>
+                <CardTitle>C단계: 테마 + 산업 시황</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="text-center p-4 bg-purple-50 dark:bg-purple-900/20 rounded-lg">
+                      <div className="text-2xl font-bold text-purple-600">{themeConditions?.length || 0}</div>
+                      <div className="text-sm text-muted-foreground">총 테마 시황 수</div>
+                    </div>
+                    <div className="text-center p-4 bg-green-50 dark:bg-green-900/20 rounded-lg">
+                      <div className="text-2xl font-bold text-green-600">
+                        {themeConditions?.filter((c: any) => c.isNew).length || 0}
+                      </div>
+                      <div className="text-sm text-muted-foreground">신규 테마 시황</div>
+                    </div>
+                  </div>
+
+                  {themeConditions && themeConditions.length > 0 && (
+                    <div className="space-y-2">
+                      <h4 className="font-medium">최근 테마 시황</h4>
+                      {themeConditions.slice(0, 5).map((condition: any, index: number) => (
+                        <div key={condition.id} className="p-3 border rounded-lg bg-muted/50" data-testid={`theme-condition-${index}`}>
+                          <div className="flex justify-between items-start mb-1">
+                            <span className="font-medium text-sm">{condition.issueTitle}</span>
+                            <div className="flex space-x-1">
+                              <Badge variant="outline">{condition.themeCode}</Badge>
+                              {condition.isNew && <Badge variant="default">신규</Badge>}
+                            </div>
+                          </div>
+                          <p className="text-xs text-muted-foreground mb-2">
+                            {condition.issueContent.length > 100 
+                              ? `${condition.issueContent.substring(0, 100)}...` 
+                              : condition.issueContent}
+                          </p>
+                          <div className="text-xs text-muted-foreground">
+                            {condition.newsDate} {condition.newsTime} • {condition.situationType}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="stage-d" className="space-y-4">
+            <Card>
+              <CardHeader>
+                <CardTitle>D단계: 매크로 시황 (A+B+C 통합)</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-4">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div className="text-center p-4 bg-orange-50 dark:bg-orange-900/20 rounded-lg">
+                      <div className="text-2xl font-bold text-orange-600">{(macroConditions && Array.isArray(macroConditions)) ? macroConditions.length : 0}</div>
+                      <div className="text-sm text-muted-foreground">총 매크로 시황 수</div>
+                    </div>
+                    <div className="text-center p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
+                      <div className="text-2xl font-bold text-blue-600">
+                        {(macroConditions && Array.isArray(macroConditions)) ? macroConditions.filter((c) => c.marketImportanceLevel === '고').length : 0}
+                      </div>
+                      <div className="text-sm text-muted-foreground">고 중요도</div>
+                    </div>
+                    <div className="text-center p-4 bg-green-50 dark:bg-green-900/20 rounded-lg">
+                      <div className="text-2xl font-bold text-green-600">
+                        {(macroConditions && Array.isArray(macroConditions) && macroConditions.length > 0) 
+                          ? (macroConditions.reduce((sum, c) => sum + parseFloat(c.confidenceScore || '0'), 0) / macroConditions.length).toFixed(2)
+                          : '0.00'}
+                      </div>
+                      <div className="text-sm text-muted-foreground">평균 신뢰도</div>
+                    </div>
+                  </div>
+
+                  {(macroConditions && Array.isArray(macroConditions) && macroConditions.length > 0) && (
+                    <div className="space-y-2">
+                      <h4 className="font-medium">최근 매크로 시황</h4>
+                      {macroConditions.slice(0, 3).map((condition, index) => (
+                        <div key={condition.id} className="p-4 border rounded-lg bg-muted/50" data-testid={`macro-condition-${index}`}>
+                          <div className="flex justify-between items-start mb-3">
+                            <div className="flex space-x-2">
+                              <Badge variant={
+                                condition.marketImportanceLevel === '고' ? 'destructive' :
+                                condition.marketImportanceLevel === '중' ? 'default' : 'secondary'
+                              }>
+                                {condition.marketImportanceLevel} 중요도
+                              </Badge>
+                              <Badge variant="outline">신뢰도 {condition.confidenceScore}</Badge>
+                            </div>
+                            <span className="text-xs text-muted-foreground">
+                              {condition.analysisDate} {condition.analysisTime}
+                            </span>
+                          </div>
+                          
+                          <div className="space-y-3">
+                            <div>
+                              <h5 className="font-medium text-sm mb-1">매크로 요약</h5>
+                              <p className="text-sm whitespace-pre-line bg-background p-2 rounded border">
+                                {condition.summary}
+                              </p>
+                            </div>
+                            
+                            {condition.anomalySignals && condition.anomalySignals.length > 0 && (
+                              <div>
+                                <h5 className="font-medium text-sm mb-1">이상신호</h5>
+                                <div className="flex flex-wrap gap-1">
+                                  {condition.anomalySignals.map((signal: string, idx: number) => (
+                                    <Badge key={idx} variant="destructive" className="text-xs">
+                                      {signal}
+                                    </Badge>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+        </Tabs>
+      </div>
+    </div>
+  );
+}

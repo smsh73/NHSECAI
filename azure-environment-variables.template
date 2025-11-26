@@ -1,0 +1,67 @@
+# Azure 환경변수 설정 가이드
+# 실제 배포 환경에서는 이 환경변수들을 Azure App Service의 Application Settings에 설정해야 합니다.
+
+# ============================================
+# 데이터베이스 연결 (PostgreSQL)
+# ============================================
+# Azure Database for PostgreSQL 연결 문자열
+DATABASE_URL=postgresql://username:password@hostname:5432/database_name
+
+# 또는 개별 환경변수로 설정
+AZURE_POSTGRES_HOST=your-postgres-server.postgres.database.azure.com
+AZURE_POSTGRES_PORT=5432
+AZURE_POSTGRES_DATABASE=aitradeconsole
+AZURE_POSTGRES_USERNAME=your_username
+AZURE_POSTGRES_PASSWORD=your_password
+AZURE_POSTGRES_SSL=true
+
+# ============================================
+# Azure Databricks
+# ============================================
+DATABRICKS_SERVER_HOSTNAME=your-databricks-workspace.azuredatabricks.net
+DATABRICKS_HTTP_PATH=/sql/1.0/warehouses/your-warehouse-id
+DATABRICKS_TOKEN=your-databricks-token
+
+# ============================================
+# Azure OpenAI PTU (Provisioned Throughput Unit)
+# ============================================
+AZURE_OPENAI_PTU_ENDPOINT=https://your-openai-resource.openai.azure.com/
+AZURE_OPENAI_PTU_API_KEY=your-openai-api-key
+AZURE_OPENAI_PTU_DEPLOYMENT=gpt-4
+AZURE_OPENAI_PTU_MODEL=gpt-4.1
+AZURE_OPENAI_PTU_API_VERSION=2024-10-21
+
+# ============================================
+# Azure OpenAI Embedding
+# ============================================
+AZURE_OPENAI_EMBEDDING_ENDPOINT=https://your-openai-resource.openai.azure.com/
+AZURE_OPENAI_EMBEDDING_KEY=your-openai-api-key
+AZURE_OPENAI_EMBEDDING_DEPLOYMENT=text-embedding-ada-002
+AZURE_OPENAI_EMBEDDING_MODEL=text-embedding-ada-002
+AZURE_OPENAI_EMBEDDING_API_VERSION=2024-10-21
+
+# ============================================
+# Azure AI Search
+# ============================================
+AZURE_SEARCH_ENDPOINT=https://your-search-service.search.windows.net
+AZURE_SEARCH_KEY=your-search-api-key
+AZURE_SEARCH_INDEX_NAME=nh-financial-index
+
+# ============================================
+# Azure CosmosDB
+# ============================================
+AZURE_COSMOS_ENDPOINT=https://your-cosmos-account.documents.azure.com:443/
+AZURE_COSMOS_KEY=your-cosmos-primary-key
+AZURE_COSMOS_DATABASE_ID=nh-investment
+
+# ============================================
+# 기타 설정
+# ============================================
+NODE_ENV=production
+PORT=5000
+
+# ============================================
+# 로컬 개발용 (SQLite)
+# ============================================
+# 로컬 개발 시에만 사용
+# DATABASE_URL=sqlite:./data/local.db

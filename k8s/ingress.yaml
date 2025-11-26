@@ -1,0 +1,48 @@
+# Optional: Ingress for custom domain and SSL/TLS
+# Requires an Ingress Controller (e.g., nginx-ingress, Application Gateway)
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: financial-analysis-ingress
+  namespace: default
+  annotations:
+    # For NGINX Ingress Controller
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
+    nginx.ingress.kubernetes.io/proxy-body-size: "10m"
+    
+    # WebSocket support
+    nginx.ingress.kubernetes.io/websocket-services: "financial-analysis-service"
+    nginx.ingress.kubernetes.io/proxy-http-version: "1.1"
+    nginx.ingress.kubernetes.io/configuration-snippet: |
+      proxy_set_header Upgrade $http_upgrade;
+      proxy_set_header Connection "upgrade";
+    
+    # For Azure Application Gateway
+    # appgw.ingress.kubernetes.io/ssl-redirect: "true"
+    # appgw.ingress.kubernetes.io/backend-protocol: "http"
+    # appgw.ingress.kubernetes.io/request-timeout: "3600"
+    
+    # For cert-manager (automatic SSL certificates)
+    # cert-manager.io/cluster-issuer: "letsencrypt-prod"
+spec:
+  ingressClassName: nginx  # or "azure-application-gateway"
+  
+  # TLS/SSL configuration
+  tls:
+  - hosts:
+    - your-domain.com
+    secretName: financial-analysis-tls
+  
+  rules:
+  - host: your-domain.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: financial-analysis-service
+            port:
+              number: 80

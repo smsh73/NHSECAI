@@ -1,0 +1,53 @@
+node_modules
+dist
+.DS_Store
+server/public
+vite.config.ts.*
+*.tar.gz
+
+# Environment files
+.env
+.env.*
+!.env.example
+!.env.production.example
+!.env.template
+*.env
+*.env.backup
+
+# Local database files
+*.db
+*.sqlite
+*.sqlite3
+data/
+logs/
+
+# Build outputs
+dist-server/
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Replit files
+.replit
+.local/
+
+# Config files with secrets
+DATABRICKS_CONFIG.md
+production.env
+development.env
+local-test-config.env
+postgresql-local.env
+
+# Verification files with secrets
+azure-config-full-flow-verification.md
+azure-config-save-test.md
+azure-config-save-verification.md
+azure-status-test-report.md

@@ -1,0 +1,41 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: financial-analysis-config
+  namespace: default
+data:
+  # Application Configuration
+  NODE_ENV: "production"
+  PORT: "5000"
+  
+  # Azure Databricks Configuration (non-sensitive)
+  AZURE_DATABRICKS_HOST: ""  # Set your Databricks hostname
+  AZURE_DATABRICKS_HTTP_PATH: ""  # Set your HTTP path
+  AZURE_DATABRICKS_USE_PRIVATE_ENDPOINT: "false"
+  
+  # Azure PostgreSQL Configuration (non-sensitive)
+  AZURE_POSTGRES_HOST: ""  # Set your PostgreSQL hostname
+  AZURE_POSTGRES_PORT: "5432"
+  AZURE_POSTGRES_DATABASE: ""  # Set your database name
+  AZURE_POSTGRES_USERNAME: ""  # Set your username
+  AZURE_POSTGRES_SSL: "true"
+  
+  # Azure CosmosDB Configuration (non-sensitive)
+  AZURE_COSMOS_ENDPOINT: ""  # Set your CosmosDB endpoint
+  AZURE_COSMOS_DATABASE_ID: ""  # Set your database ID
+  
+  # Azure OpenAI Configuration (non-sensitive)
+  AZURE_OPENAI_ENDPOINT: ""  # Set your OpenAI endpoint
+  AZURE_OPENAI_DEPLOYMENT: ""  # Set your deployment name
+  AZURE_OPENAI_API_VERSION: "2024-02-15-preview"
+  
+  # Azure OpenAI Embedding Configuration (non-sensitive)
+  AZURE_OPENAI_EMBEDDING_ENDPOINT: ""  # Set your embedding endpoint
+  AZURE_OPENAI_EMBEDDING_DEPLOYMENT: ""  # Set your embedding deployment
+  AZURE_OPENAI_EMBEDDING_MODEL: "text-embedding-3-large"
+  AZURE_OPENAI_EMBEDDING_API_VERSION: "2024-02-15-preview"
+  
+  # Azure Authentication (non-sensitive)
+  AZURE_TENANT_ID: ""  # Set your tenant ID
+  AZURE_CLIENT_ID: ""  # Set your client ID (for service principal)
+  AZURE_USE_SYSTEM_MANAGED_IDENTITY: "false"
