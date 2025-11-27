@@ -2,8 +2,24 @@ import { QueryClient, QueryFunction } from "@tanstack/react-query";
 
 async function throwIfResNotOk(res: Response) {
   if (!res.ok) {
-    const text = (await res.text()) || res.statusText;
-    throw new Error(`${res.status}: ${text}`);
+    const contentType = res.headers.get('content-type') || '';
+    let errorText: string;
+    
+    if (contentType.includes('application/json')) {
+      try {
+        const errorData = await res.json();
+        errorText = errorData.message || errorData.error || JSON.stringify(errorData);
+      } catch {
+        errorText = res.statusText;
+      }
+    } else {
+      // HTML 응답인 경우
+      const htmlText = await res.text().catch(() => res.statusText);
+      // HTML에서 첫 500자만 추출
+      errorText = htmlText.length > 500 ? htmlText.substring(0, 500) + '...' : htmlText;
+    }
+    
+    throw new Error(`${res.status}: ${errorText}`);
   }
 }
 

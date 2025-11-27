@@ -5,14 +5,18 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { WorkflowNode } from "@/types/workflow";
 import { useState, useEffect, useRef, useMemo } from "react";
-import { X } from "lucide-react";
+import { X, Database, Eye, AlertCircle } from "lucide-react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import type { Prompt, ApiCall, PythonScript, SqlQuery, DataSource } from "@shared/schema";
+import type { Prompt, ApiCall, PythonScript, SqlQuery, DataSource, RagEmbeddingSchema } from "@shared/schema";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { Play, Loader2, FileText } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Badge } from "@/components/ui/badge";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 
 interface PropertiesPanelProps {
   selectedNode: WorkflowNode | null;
@@ -22,9 +26,10 @@ interface PropertiesPanelProps {
   allNodes?: Array<{ id: string; data: any }>;
   allEdges?: Array<{ source: string; target: string }>;
   nodeExecutionResults?: Record<string, { input?: any; output?: any; error?: string; executionTime?: number; status?: string }>;
+  onExecuteNode?: (nodeId: string, workflowDefinition: any) => Promise<void>;
 }
 
-export function PropertiesPanel({ selectedNode, onNodeUpdate, onClose, isVisible = true, allNodes = [], allEdges = [], nodeExecutionResults = {} }: PropertiesPanelProps) {
+export function PropertiesPanel({ selectedNode, onNodeUpdate, onClose, isVisible = true, allNodes = [], allEdges = [], nodeExecutionResults = {}, onExecuteNode }: PropertiesPanelProps) {
   const { toast } = useToast();
   const [formData, setFormData] = useState({
     label: '',
@@ -51,6 +56,10 @@ export function PropertiesPanel({ selectedNode, onNodeUpdate, onClose, isVisible
     preprocessPrompt: '',
     postprocessPrompt: '',
     // RAG specific fields
+    ragSchemaId: '',
+    searchIndexName: '',
+    vectorFieldName: 'content_vector',
+    contentFieldName: 'content',
     searchType: 'hybrid',
     topK: 10,
     threshold: 0.7,
@@ -148,6 +157,17 @@ export function PropertiesPanel({ selectedNode, onNodeUpdate, onClose, isVisible
       return await response.json();
     },
     enabled: !!sqlQueryId,
+    staleTime: 60 * 1000,
+  });
+
+  const ragSchemaId = (selectedNode?.data as any)?.ragSchemaId || selectedNode?.data?.config?.ragSchemaId;
+  const { data: ragSchemas } = useQuery<RagEmbeddingSchema[]>({
+    queryKey: ['/api/rag/embedding/schemas'],
+    queryFn: async () => {
+      const response = await apiRequest('GET', '/api/rag/embedding/schemas');
+      if (!response.ok) return [];
+      return await response.json();
+    },
     staleTime: 60 * 1000,
   });
 
@@ -1229,6 +1249,36 @@ export function PropertiesPanel({ selectedNode, onNodeUpdate, onClose, isVisible
         {(selectedNode.data?.config?.type === 'rag' || selectedNode.type === 'rag') && (
           <>
             <div>
+              <Label htmlFor="rag-schema" className="text-sm font-medium text-foreground">
+                RAG 스키마 선택
+              </Label>
+              <Select 
+                value={(selectedNode.data as any)?.ragSchemaId || formData.ragSchemaId || ''} 
+                onValueChange={(value) => {
+                  handleInputChange('ragSchemaId', value);
+                  // RAG 스키마 정보 로드
+                  const schema = ragSchemas?.find((s: any) => s.id === value);
+                  if (schema) {
+                    handleInputChange('searchIndexName', schema.searchIndexName);
+                    handleInputChange('vectorFieldName', schema.vectorFieldName || 'content_vector');
+                    handleInputChange('contentFieldName', schema.contentFieldName || 'content');
+                  }
+                }}
+              >
+                <SelectTrigger className="mt-1" data-testid="select-rag-schema">
+                  <SelectValue placeholder="RAG 스키마를 선택하세요" />
+                </SelectTrigger>
+                <SelectContent>
+                  {ragSchemas?.filter((s: any) => s.isActive).map((schema: any) => (
+                    <SelectItem key={schema.id} value={schema.id}>
+                      {schema.name} ({schema.searchIndexName})
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div>
               <Label htmlFor="search-type" className="text-sm font-medium text-foreground">
                 검색 유형
               </Label>
@@ -1241,8 +1291,8 @@ export function PropertiesPanel({ selectedNode, onNodeUpdate, onClose, isVisible
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="hybrid">하이브리드 검색</SelectItem>
-                  <SelectItem value="financial">금융 데이터 검색</SelectItem>
-                  <SelectItem value="news">뉴스 데이터 검색</SelectItem>
+                  <SelectItem value="vector">벡터 검색</SelectItem>
+                  <SelectItem value="keyword">키워드 검색</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -2024,6 +2074,363 @@ requests==2.31.0"
           </Button>
         </div>
       </div>
+      
+      {/* 데이터 조회 다이얼로그 */}
+      <NodeDataViewDialog
+        selectedNode={selectedNode}
+        allNodes={allNodes}
+        allEdges={allEdges}
+        nodeExecutionResults={nodeExecutionResults}
+        onExecuteNode={onExecuteNode}
+      />
     </div>
+  );
+}
+
+// 노드 데이터 조회 다이얼로그 컴포넌트
+interface NodeDataViewDialogProps {
+  selectedNode: WorkflowNode | null;
+  allNodes: Array<{ id: string; data: any }>;
+  allEdges: Array<{ source: string; target: string }>;
+  nodeExecutionResults: Record<string, { input?: any; output?: any; error?: string; executionTime?: number; status?: string }>;
+  onExecuteNode?: (nodeId: string, workflowDefinition: any) => Promise<void>;
+}
+
+function NodeDataViewDialog({ 
+  selectedNode, 
+  allNodes, 
+  allEdges, 
+  nodeExecutionResults,
+  onExecuteNode 
+}: NodeDataViewDialogProps) {
+  const { toast } = useToast();
+  const [isOpen, setIsOpen] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [queryData, setQueryData] = useState<any[]>([]);
+  const [queryError, setQueryError] = useState<string | null>(null);
+  const [executionStatus, setExecutionStatus] = useState<string>('');
+
+  // 노드 타입별 쿼리 생성 함수
+  const generateQuery = useMemo(() => {
+    if (!selectedNode) return null;
+
+    const nodeType = selectedNode.type || selectedNode.data?.config?.type;
+    const nodeData = selectedNode.data || {};
+
+    switch (nodeType) {
+      case 'dataSource':
+      case 'sql_query': {
+        // SQL 쿼리 노드
+        const query = nodeData.query || nodeData.config?.query;
+        if (!query) return null;
+        
+        // SQL 쿼리 실행을 위한 쿼리 생성
+        return {
+          type: 'sql',
+          query: query,
+          dataSourceId: nodeData.dataSourceId || nodeData.config?.dataSourceId
+        };
+      }
+      
+      case 'prompt': {
+        // 프롬프트 노드 - 실행 결과 조회
+        return {
+          type: 'execution_result',
+          nodeId: selectedNode.id
+        };
+      }
+      
+      case 'api': {
+        // API 노드 - 실행 결과 조회
+        return {
+          type: 'execution_result',
+          nodeId: selectedNode.id
+        };
+      }
+      
+      default: {
+        // 기타 노드 - 실행 결과 조회
+        return {
+          type: 'execution_result',
+          nodeId: selectedNode.id
+        };
+      }
+    }
+  }, [selectedNode]);
+
+  // 이전 노드 확인 및 자동 실행
+  const checkAndExecutePreviousNodes = async (workflowDefinition: any) => {
+    if (!selectedNode || !onExecuteNode) return;
+
+    const previousNodeIds = allEdges
+      .filter(edge => edge.target === selectedNode.id)
+      .map(edge => edge.source);
+
+    const nodesToExecute: string[] = [];
+    
+    // 위상 정렬을 위한 의존성 체크
+    const visited = new Set<string>();
+    const visiting = new Set<string>();
+    
+    const visit = (nodeId: string) => {
+      if (visiting.has(nodeId)) {
+        throw new Error(`Circular dependency detected involving node ${nodeId}`);
+      }
+      if (visited.has(nodeId)) return;
+      
+      visiting.add(nodeId);
+      
+      const nodeEdges = allEdges.filter(edge => edge.target === nodeId);
+      for (const edge of nodeEdges) {
+        visit(edge.source);
+      }
+      
+      visiting.delete(nodeId);
+      visited.add(nodeId);
+      
+      // 실행되지 않은 노드만 추가
+      if (!nodeExecutionResults[nodeId] || nodeExecutionResults[nodeId].status !== 'completed') {
+        nodesToExecute.push(nodeId);
+      }
+    };
+
+    // 현재 노드까지의 모든 이전 노드 방문
+    visit(selectedNode.id);
+    
+    // 실행 순서대로 정렬 (위상 정렬 결과 반대 순서)
+    const sortedNodes = Array.from(visited).reverse();
+    
+    // 실행되지 않은 노드만 실행
+    for (const nodeId of sortedNodes) {
+      if (nodeId === selectedNode.id) continue; // 현재 노드는 제외
+      
+      const result = nodeExecutionResults[nodeId];
+      if (!result || result.status !== 'completed') {
+        setExecutionStatus(`이전 노드 실행 중: ${nodeId}...`);
+        try {
+          await onExecuteNode(nodeId, workflowDefinition);
+        } catch (error: any) {
+          throw new Error(`이전 노드 실행 실패 (${nodeId}): ${error.message}`);
+        }
+      }
+    }
+  };
+
+  const handleViewData = async () => {
+    if (!selectedNode || !generateQuery) {
+      toast({
+        title: "오류",
+        description: "노드 데이터를 조회할 수 없습니다.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setIsOpen(true);
+    setIsLoading(true);
+    setQueryData([]);
+    setQueryError(null);
+    setExecutionStatus('');
+
+    try {
+      // 워크플로우 정의 생성
+      const workflowDefinition = {
+        nodes: allNodes.map(n => ({
+          id: n.id,
+          type: n.data?.config?.type || 'unknown',
+          position: { x: 0, y: 0 },
+          data: n.data
+        })),
+        edges: allEdges.map(e => ({
+          id: `e-${e.source}-${e.target}`,
+          source: e.source,
+          target: e.target
+        }))
+      };
+
+      // 이전 노드 확인 및 자동 실행
+      if (onExecuteNode) {
+        try {
+          await checkAndExecutePreviousNodes(workflowDefinition);
+        } catch (error: any) {
+          setQueryError(error.message);
+          setIsLoading(false);
+          return;
+        }
+      }
+
+      // 현재 노드 실행 (아직 실행되지 않은 경우)
+      const currentResult = nodeExecutionResults[selectedNode.id];
+      if (!currentResult || currentResult.status !== 'completed') {
+        if (onExecuteNode) {
+          setExecutionStatus(`현재 노드 실행 중: ${selectedNode.id}...`);
+          await onExecuteNode(selectedNode.id, workflowDefinition);
+        }
+      }
+
+      // 쿼리 타입별 데이터 조회
+      if (generateQuery.type === 'sql') {
+        // SQL 쿼리 실행
+        setExecutionStatus('SQL 쿼리 실행 중...');
+        const response = await apiRequest('POST', '/api/azure/databricks/query', {
+          sql: generateQuery.query,
+          maxRows: 1000
+        });
+
+        if (!response.ok) {
+          const error = await response.json().catch(() => ({ error: 'Query execution failed' }));
+          throw new Error(error.error || error.message || 'Query execution failed');
+        }
+
+        const result = await response.json();
+        if (result.success && result.data) {
+          setQueryData(Array.isArray(result.data) ? result.data : [result.data]);
+        } else {
+          throw new Error('쿼리 실행 결과가 없습니다.');
+        }
+      } else if (generateQuery.type === 'execution_result') {
+        // 실행 결과 조회
+        const result = nodeExecutionResults[generateQuery.nodeId];
+        if (result && result.output) {
+          // 출력 데이터를 테이블 형식으로 변환
+          if (Array.isArray(result.output)) {
+            setQueryData(result.output);
+          } else if (typeof result.output === 'object') {
+            // 객체를 배열로 변환
+            setQueryData([result.output]);
+          } else {
+            setQueryData([{ value: result.output }]);
+          }
+        } else {
+          throw new Error('노드가 아직 실행되지 않았습니다. 먼저 노드를 실행해주세요.');
+        }
+      }
+
+      setExecutionStatus('');
+    } catch (error: any) {
+      setQueryError(error.message || '데이터 조회 중 오류가 발생했습니다.');
+      console.error('Data view error:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  if (!selectedNode) return null;
+
+  return (
+    <>
+      {/* 데이터 조회 버튼 */}
+      <div className="mb-4 pt-4 border-t">
+        <Button
+          onClick={handleViewData}
+          variant="outline"
+          className="w-full"
+          disabled={isLoading || !generateQuery}
+        >
+          {isLoading ? (
+            <>
+              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+              조회 중...
+            </>
+          ) : (
+            <>
+              <Eye className="w-4 h-4 mr-2" />
+              노드 데이터 조회
+            </>
+          )}
+        </Button>
+        {!generateQuery && (
+          <p className="text-xs text-muted-foreground mt-2">
+            이 노드 타입은 데이터 조회를 지원하지 않습니다.
+          </p>
+        )}
+      </div>
+
+      {/* 데이터 조회 다이얼로그 */}
+      <Dialog open={isOpen} onOpenChange={setIsOpen}>
+        <DialogContent className="max-w-6xl max-h-[90vh] overflow-hidden flex flex-col">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Database className="w-5 h-5" />
+              노드 데이터 조회: {selectedNode.data?.label || selectedNode.id}
+            </DialogTitle>
+            <DialogDescription>
+              {selectedNode.data?.description || '노드 실행 결과 데이터를 조회합니다.'}
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="flex-1 overflow-hidden flex flex-col space-y-4">
+            {executionStatus && (
+              <Alert>
+                <Loader2 className="w-4 h-4 animate-spin" />
+                <AlertDescription>{executionStatus}</AlertDescription>
+              </Alert>
+            )}
+
+            {queryError && (
+              <Alert variant="destructive">
+                <AlertCircle className="w-4 h-4" />
+                <AlertDescription>{queryError}</AlertDescription>
+              </Alert>
+            )}
+
+            {isLoading ? (
+              <div className="flex items-center justify-center py-12">
+                <Loader2 className="w-8 h-8 animate-spin text-primary" />
+                <span className="ml-2">데이터 조회 중...</span>
+              </div>
+            ) : queryData.length > 0 ? (
+              <div className="flex-1 overflow-hidden flex flex-col">
+                <div className="flex items-center justify-between mb-2">
+                  <Badge variant="secondary">
+                    {queryData.length}건의 데이터
+                  </Badge>
+                </div>
+                <ScrollArea className="flex-1 border rounded-md">
+                  <Table>
+                    <TableHeader className="sticky top-0 bg-background z-10">
+                      <TableRow>
+                        {Object.keys(queryData[0] || {}).map((key) => (
+                          <TableHead key={key} className="font-semibold">
+                            {key}
+                          </TableHead>
+                        ))}
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {queryData.map((row: any, rowIndex: number) => (
+                        <TableRow key={rowIndex}>
+                          {Object.keys(queryData[0] || {}).map((key) => {
+                            const value = row[key];
+                            const displayValue = value === null || value === undefined 
+                              ? '-' 
+                              : typeof value === 'object' 
+                                ? JSON.stringify(value, null, 2)
+                                : String(value);
+                            
+                            return (
+                              <TableCell key={key} className="max-w-[300px]">
+                                <div className="truncate" title={displayValue}>
+                                  {displayValue}
+                                </div>
+                              </TableCell>
+                            );
+                          })}
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </ScrollArea>
+              </div>
+            ) : !queryError && !isLoading ? (
+              <div className="text-center py-12 text-muted-foreground">
+                <Database className="w-12 h-12 mx-auto mb-4 opacity-50" />
+                <p>조회된 데이터가 없습니다.</p>
+              </div>
+            ) : null}
+          </div>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }

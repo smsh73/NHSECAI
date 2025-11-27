@@ -382,6 +382,123 @@ const templates: WorkflowTemplate[] = [
         { id: "e10", source: "merge-1", target: "report-1", type: "default" }
       ]
     }
+  },
+  {
+    id: "ai-market-analysis",
+    name: "AI 시황 생성",
+    description: "뉴스 데이터를 수집하고 AI로 분석하여 테마별 시황과 매크로 시황을 생성합니다",
+    icon: <TrendingUp className="w-5 h-5" />,
+    definition: {
+      nodes: [
+        {
+          id: "start-1",
+          type: "start",
+          position: { x: 100, y: 300 },
+          data: {
+            label: "시작",
+            description: "AI 시황 생성 워크플로우 시작",
+            config: {}
+          }
+        },
+        {
+          id: "collect-news",
+          type: "api",
+          position: { x: 300, y: 300 },
+          data: {
+            label: "뉴스 데이터 수집",
+            description: "최근 30분간의 뉴스 데이터를 수집하고 전처리합니다",
+            config: {
+              type: "api",
+              url: "/api/ai-market-analysis/collect-news",
+              method: "POST",
+              apiCallId: undefined
+            }
+          }
+        },
+        {
+          id: "extract-events",
+          type: "prompt",
+          position: { x: 500, y: 300 },
+          data: {
+            label: "주요이벤트 추출",
+            description: "AI를 활용하여 시장에 영향을 미치는 주요 이벤트를 추출합니다",
+            config: {
+              type: "prompt",
+              systemPrompt: "당신은 금융 시장 분석 전문가입니다. 제공된 뉴스 데이터에서 시장에 영향을 미치는 주요 이벤트를 추출해주세요.",
+              userPromptTemplate: "다음 뉴스 데이터를 분석하여 주요 시장 이벤트를 추출해주세요:\n\n{newsData}\n\n# 추출 항목\n- 이벤트명\n- 영향도 (높음/중간/낮음)\n- 관련 종목/섹터\n- 예상 시장 영향 (상승/하락/중립)\n- 이벤트 발생 시점",
+              temperature: 0.5,
+              maxTokens: 1000
+            }
+          }
+        },
+        {
+          id: "generate-themes",
+          type: "prompt",
+          position: { x: 700, y: 200 },
+          data: {
+            label: "테마 시황 생성",
+            description: "테마별 뉴스 분석 및 시황을 생성합니다",
+            config: {
+              type: "prompt",
+              systemPrompt: "당신은 금융 시장 테마 분석 전문가입니다. 제공된 뉴스와 이벤트 데이터를 바탕으로 테마별 시황을 생성해주세요.",
+              userPromptTemplate: "다음 데이터를 바탕으로 테마별 시황을 생성해주세요:\n\n뉴스 데이터: {newsData}\n주요 이벤트: {marketEvents}\n\n# 생성 항목\n- 테마명\n- 테마 설명\n- 관련 종목 및 영향도\n- 테마 전망 (긍정/부정/중립)\n- 투자 시사점",
+              temperature: 0.6,
+              maxTokens: 1500
+            }
+          }
+        },
+        {
+          id: "generate-macro",
+          type: "prompt",
+          position: { x: 700, y: 400 },
+          data: {
+            label: "매크로 시황 생성",
+            description: "전체 시장의 종합적인 매크로 시황을 생성합니다",
+            config: {
+              type: "prompt",
+              systemPrompt: "당신은 금융 시장 매크로 분석 전문가입니다. 제공된 모든 데이터를 종합하여 전체 시장의 매크로 시황을 생성해주세요.",
+              userPromptTemplate: "다음 데이터를 종합하여 매크로 시황을 생성해주세요:\n\n뉴스 데이터: {newsData}\n주요 이벤트: {marketEvents}\n테마 시황: {themeMarkets}\n\n# 생성 항목\n- 시장 전반 동향 (상승/하락/보합)\n- 주요 변동 요인\n- 섹터별 강약 분석\n- 리스크 요인\n- 향후 전망 및 투자 전략",
+              temperature: 0.7,
+              maxTokens: 2000
+            }
+          }
+        },
+        {
+          id: "merge-results",
+          type: "data_aggregator",
+          position: { x: 900, y: 300 },
+          data: {
+            label: "결과 통합",
+            description: "모든 분석 결과를 통합합니다",
+            config: {}
+          }
+        },
+        {
+          id: "save-results",
+          type: "api",
+          position: { x: 1100, y: 300 },
+          data: {
+            label: "결과 저장",
+            description: "생성된 시황 데이터를 저장합니다",
+            config: {
+              type: "api",
+              url: "/api/ai-market-analysis/save-results",
+              method: "POST",
+              apiCallId: undefined
+            }
+          }
+        }
+      ],
+      edges: [
+        { id: "e1", source: "start-1", target: "collect-news", type: "default" },
+        { id: "e2", source: "collect-news", target: "extract-events", type: "default" },
+        { id: "e3", source: "extract-events", target: "generate-themes", type: "default" },
+        { id: "e4", source: "extract-events", target: "generate-macro", type: "default" },
+        { id: "e5", source: "generate-themes", target: "merge-results", type: "default" },
+        { id: "e6", source: "generate-macro", target: "merge-results", type: "default" },
+        { id: "e7", source: "merge-results", target: "save-results", type: "default" }
+      ]
+    }
   }
 ];
 

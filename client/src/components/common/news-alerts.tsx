@@ -3,9 +3,10 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { ArrowRight } from 'lucide-react';
+import { ArrowRight, Newspaper, Bell } from 'lucide-react';
 import { Link } from 'wouter';
 import { cn } from '@/lib/utils';
+import { DataBadge } from '@/components/common/data-badge';
 
 interface NewsItem {
   id: string;
@@ -17,6 +18,8 @@ interface NewsItem {
   priority: 'high' | 'medium' | 'low';
   url?: string;
   isBreaking?: boolean;
+  isMock?: boolean;
+  isSample?: boolean;
 }
 
 interface AlertItem {
@@ -91,16 +94,15 @@ function NewsCard({ item }: { item: NewsItem }) {
 
   return (
     <Card className={cn(
-      "group relative overflow-hidden cursor-pointer transition-all duration-300",
-      "hover:shadow-lg hover:-translate-y-0.5",
-      "bg-card border border-black/10 dark:border-white/10",
-      "shadow-sm"
+      "group relative overflow-hidden cursor-pointer",
+      "bg-card border",
+      (item.isMock || item.isSample) && "opacity-90"
     )}>
       
       {/* Breaking News Badge */}
       {item.isBreaking && (
         <div className="absolute top-2 right-2 z-10">
-          <Badge className="text-xs bg-red-500 hover:bg-red-600 text-white animate-pulse">
+          <Badge className="text-xs bg-red-500 text-white">
             속보
           </Badge>
         </div>
@@ -112,9 +114,15 @@ function NewsCard({ item }: { item: NewsItem }) {
           {/* Content */}
           <div className="flex-1 min-w-0">
             <div className="flex items-start justify-between mb-2">
-              <h3 className="font-semibold text-foreground line-clamp-2 group-hover:text-primary transition-colors">
-                {item.title}
-              </h3>
+              <div className="flex-1 flex items-center gap-2">
+                <h3 className={cn(
+                  "font-semibold text-foreground line-clamp-2 group-hover:text-primary transition-colors",
+                  (item.isMock || item.isSample) && "italic"
+                )}>
+                  {item.title}
+                </h3>
+                <DataBadge isMock={item.isMock} isSample={item.isSample} />
+              </div>
               {item.priority === 'high' && (
                 <div className="text-orange-500 text-sm font-medium ml-2 flex-shrink-0">
                   중요
@@ -122,7 +130,10 @@ function NewsCard({ item }: { item: NewsItem }) {
               )}
             </div>
             
-            <p className="text-sm text-muted-foreground line-clamp-2 mb-3">
+            <p className={cn(
+              "text-sm text-muted-foreground line-clamp-2 mb-3",
+              (item.isMock || item.isSample) && "italic"
+            )}>
               {item.summary}
             </p>
 
@@ -185,10 +196,8 @@ function AlertCard({ item }: { item: AlertItem }) {
 
   return (
     <Card className={cn(
-      "group relative overflow-hidden transition-all duration-300",
-      "hover:shadow-lg",
-      "bg-card border border-black/10 dark:border-white/10",
-      "shadow-sm",
+      "group relative overflow-hidden",
+      "bg-card border",
       !item.isRead && "ring-1 ring-primary/20"
     )}>
       
@@ -389,11 +398,9 @@ export function NewsAlerts({
               <NewsSkeleton />
             ) : transformedNews.length > 0 ? (
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                {transformedNews.map((item, index) => (
+                {transformedNews.map((item) => (
                   <div 
                     key={item.id}
-                    className="animate-fade-in"
-                    style={{ animationDelay: `${index * 100}ms` }}
                     data-testid={`news-card-${item.id}`}
                   >
                     <NewsCard item={item} />
@@ -401,8 +408,10 @@ export function NewsAlerts({
                 ))}
               </div>
             ) : (
-              <Card className="text-center p-12 bg-card border border-black/10 dark:border-white/10">
-                <div className="text-4xl mb-4">📰</div>
+              <Card className="text-center p-12 bg-card border">
+                <div className="mx-auto w-16 h-16 bg-muted rounded flex items-center justify-center mb-4">
+                  <Newspaper className="w-8 h-8 text-muted-foreground" />
+                </div>
                 <h3 className="text-lg font-semibold mb-2">뉴스가 없습니다</h3>
                 <p className="text-muted-foreground">
                   최신 시장 뉴스가 업데이트되면 여기에 표시됩니다
@@ -415,11 +424,9 @@ export function NewsAlerts({
           <TabsContent value="alerts" className="space-y-6" data-testid="alerts-tab">
             {mockAlerts.length > 0 ? (
               <div className="space-y-4">
-                {mockAlerts.map((item, index) => (
+                {mockAlerts.map((item) => (
                   <div 
                     key={item.id}
-                    className="animate-fade-in"
-                    style={{ animationDelay: `${index * 100}ms` }}
                     data-testid={`alert-card-${item.id}`}
                   >
                     <AlertCard item={item} />
@@ -427,8 +434,10 @@ export function NewsAlerts({
                 ))}
               </div>
             ) : (
-              <Card className="text-center p-12 bg-card border border-black/10 dark:border-white/10">
-                <div className="text-4xl mb-4">🔔</div>
+              <Card className="text-center p-12 bg-card border">
+                <div className="mx-auto w-16 h-16 bg-muted rounded flex items-center justify-center mb-4">
+                  <Bell className="w-8 h-8 text-muted-foreground" />
+                </div>
                 <h3 className="text-lg font-semibold mb-2">알림이 없습니다</h3>
                 <p className="text-muted-foreground">
                   새로운 시스템 알림이 있으면 여기에 표시됩니다

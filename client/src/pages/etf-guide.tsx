@@ -469,7 +469,7 @@ export default function ETFGuide() {
                 <span>ETF 투자 상담</span>
                 {isStreaming && (
                   <div className="flex items-center space-x-1 text-blue-500">
-                    <Loader2 className="h-4 w-4 animate-spin" />
+                    <Loader2 className="h-4 w-4" />
                     <span className="text-sm">AI가 답변하는 중...</span>
                   </div>
                 )}
@@ -544,7 +544,7 @@ export default function ETFGuide() {
                           <div className="max-w-[80%] rounded-lg px-4 py-2 bg-muted">
                             <div className="whitespace-pre-wrap break-words">
                               {streamingContent}
-                              <span className="inline-block w-2 h-4 bg-blue-500 animate-pulse ml-1" />
+                              <span className="inline-block w-2 h-4 bg-blue-500 ml-1" />
                             </div>
                           </div>
                         </div>
@@ -574,7 +574,7 @@ export default function ETFGuide() {
                     data-testid="button-send"
                   >
                     {sendMessageMutation.isPending ? (
-                      <Loader2 className="h-4 w-4 animate-spin" />
+                      <Loader2 className="h-4 w-4" />
                     ) : (
                       <Send className="h-4 w-4" />
                     )}
@@ -641,7 +641,7 @@ export default function ETFGuide() {
                   {recommendationsLoading ? (
                     <div className="space-y-3">
                       {[...Array(3)].map((_, i) => (
-                        <div key={i} className="h-20 bg-muted rounded animate-pulse"></div>
+                        <div key={i} className="h-20 bg-muted rounded"></div>
                       ))}
                     </div>
                   ) : recommendations && recommendations.length > 0 ? (

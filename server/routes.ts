@@ -2836,10 +2836,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
   );
 
   // PATCH /api/news/:newsId/theme - Update news theme (Admin only)
-  // TODO: Implement requireAuth middleware for authentication
   app.patch(
     "/api/news/:newsId/theme",
-    /* requireAuth, */ async (req: any, res: any) => {
+    authMiddleware,
+    adminOnlyMiddleware,
+    async (req: any, res: any) => {
       try {
         const { themeId } = req.body;
 
@@ -8182,14 +8183,67 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const priceAlertsActive = watchlist.filter(w => w.alertEnabled && w.targetPrice).length;
         const newsAlertsActive = watchlist.filter(w => w.alertEnabled).length;
         
-        // TODO: Calculate actual performance metrics from market data
+        // Calculate actual performance metrics from market data
+        let avgPerformance = 0;
+        let topPerformer = "";
+        let worstPerformer = "";
+        
+        if (watchlist.length > 0) {
+          const { db } = await import("./db.js");
+          const { financialData } = await import("@shared/schema");
+          const { eq, and, desc, gte, sql } = await import("drizzle-orm");
+          
+          const symbols = watchlist.map(w => w.symbol);
+          const sevenDaysAgo = new Date();
+          sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+          
+          const performanceData: Array<{ symbol: string; changeRate: number }> = [];
+          
+          for (const symbol of symbols) {
+            // Get latest price
+            const [latest] = await db.select()
+              .from(financialData)
+              .where(and(
+                eq(financialData.symbol, symbol),
+                gte(financialData.timestamp, sevenDaysAgo)
+              ))
+              .orderBy(desc(financialData.timestamp))
+              .limit(1);
+            
+            // Get price 7 days ago
+            const [sevenDaysAgoData] = await db.select()
+              .from(financialData)
+              .where(and(
+                eq(financialData.symbol, symbol),
+                sql`${financialData.timestamp} <= ${sevenDaysAgo}`
+              ))
+              .orderBy(desc(financialData.timestamp))
+              .limit(1);
+            
+            if (latest && sevenDaysAgoData && latest.price && sevenDaysAgoData.price) {
+              const latestPrice = parseFloat(latest.price.toString());
+              const oldPrice = parseFloat(sevenDaysAgoData.price.toString());
+              const changeRate = ((latestPrice - oldPrice) / oldPrice) * 100;
+              performanceData.push({ symbol, changeRate });
+            }
+          }
+          
+          if (performanceData.length > 0) {
+            avgPerformance = performanceData.reduce((sum, p) => sum + p.changeRate, 0) / performanceData.length;
+            
+            const sorted = [...performanceData].sort((a, b) => b.changeRate - a.changeRate);
+            topPerformer = sorted[0]?.symbol || "";
+            worstPerformer = sorted[sorted.length - 1]?.symbol || "";
+          }
+        }
+        
         res.json({
           totalWatched: watchlist.length,
           priceAlertsActive,
           newsAlertsActive,
-          avgPerformance: 0,
-          topPerformer: "",
-          worstPerformer: ""
+          avgPerformance: Math.round(avgPerformance * 100) / 100,
+          topPerformer,
+          worstPerformer
         });
       } catch (error: any) {
         console.error("Get watchlist stats error:", error);
@@ -8206,12 +8260,94 @@ export async function registerRoutes(app: Express): Promise<Server> {
     async (req: any, res: any) => {
       try {
         const { userId } = req.params;
-        // TODO: Get alerts from database (alerts table needs to be created)
-        // For now, return empty array
-        res.json([]);
+        const { isRead, type, category, limit } = req.query;
+
+        const { db } = await import("./db.js");
+        const { alerts } = await import("@shared/schema");
+        const { eq, and, desc, asc } = await import("drizzle-orm");
+
+        let query = db.select().from(alerts).where(eq(alerts.userId, userId));
+
+        if (isRead !== undefined) {
+          const conditions = [eq(alerts.userId, userId)];
+          if (isRead === 'true') {
+            conditions.push(eq(alerts.isRead, true));
+          } else if (isRead === 'false') {
+            conditions.push(eq(alerts.isRead, false));
+          }
+          query = db.select().from(alerts).where(and(...conditions));
+        }
+
+        if (type) {
+          const conditions = [eq(alerts.userId, userId)];
+          if (isRead !== undefined) {
+            conditions.push(eq(alerts.isRead, isRead === 'true'));
+          }
+          conditions.push(eq(alerts.type, type));
+          query = db.select().from(alerts).where(and(...conditions));
+        }
+
+        if (category) {
+          const conditions = [eq(alerts.userId, userId)];
+          if (isRead !== undefined) {
+            conditions.push(eq(alerts.isRead, isRead === 'true'));
+          }
+          if (type) {
+            conditions.push(eq(alerts.type, type));
+          }
+          conditions.push(eq(alerts.category, category));
+          query = db.select().from(alerts).where(and(...conditions));
+        }
+
+        const results = await query.orderBy(desc(alerts.createdAt)).limit(limit ? parseInt(limit) : 100);
+
+        res.json(results);
       } catch (error: any) {
         console.error("Get alerts error:", error);
         res.status(500).json({ message: "Failed to fetch alerts" });
+      }
+    }
+  );
+
+  // Create alert
+  app.post(
+    "/api/personalization/:userId/alerts",
+    authMiddleware,
+    ownerOrAdminMiddleware,
+    async (req: any, res: any) => {
+      try {
+        const { userId } = req.params;
+        const { title, message, type, priority, category, relatedResourceType, relatedResourceId, actionUrl, actionLabel, metadata, expiresAt } = req.body;
+
+        if (!title || !message) {
+          return res.status(400).json({ message: "Title and message are required" });
+        }
+
+        const { db } = await import("./db.js");
+        const { alerts } = await import("@shared/schema");
+        const { insertAlertSchema } = await import("@shared/schema");
+
+        const alertData = insertAlertSchema.parse({
+          userId,
+          title,
+          message,
+          type: type || 'info',
+          priority: priority || 'normal',
+          category,
+          relatedResourceType,
+          relatedResourceId,
+          actionUrl,
+          actionLabel,
+          metadata,
+          expiresAt: expiresAt ? new Date(expiresAt) : null,
+        });
+
+        const [alert] = await db.insert(alerts).values(alertData).returning();
+
+        res.json(alert);
+      } catch (error: any) {
+        console.error("Create alert error:", error);
+        res.status(500).json({ message: "Failed to create alert", error: error.message });
       }
     }
   );
@@ -8223,13 +8359,58 @@ export async function registerRoutes(app: Express): Promise<Server> {
     ownerOrAdminMiddleware,
     async (req: any, res: any) => {
       try {
-        const { alertId } = req.params;
-        // TODO: Update alert read status in database (alerts table needs to be created)
-        // For now, just return success
-        res.json({ message: "Alert marked as read" });
+        const { alertId, userId } = req.params;
+
+        const { db } = await import("./db.js");
+        const { alerts } = await import("@shared/schema");
+        const { eq, and } = await import("drizzle-orm");
+
+        const [updated] = await db.update(alerts)
+          .set({
+            isRead: true,
+            readAt: new Date(),
+          })
+          .where(and(
+            eq(alerts.id, alertId),
+            eq(alerts.userId, userId)
+          ))
+          .returning();
+
+        if (!updated) {
+          return res.status(404).json({ message: "Alert not found" });
+        }
+
+        res.json({ message: "Alert marked as read", alert: updated });
       } catch (error: any) {
         console.error("Mark alert as read error:", error);
         res.status(500).json({ message: "Failed to mark alert as read" });
+      }
+    }
+  );
+
+  // Delete alert
+  app.delete(
+    "/api/personalization/:userId/alerts/:alertId",
+    authMiddleware,
+    ownerOrAdminMiddleware,
+    async (req: any, res: any) => {
+      try {
+        const { alertId, userId } = req.params;
+
+        const { db } = await import("./db.js");
+        const { alerts } = await import("@shared/schema");
+        const { eq, and } = await import("drizzle-orm");
+
+        await db.delete(alerts)
+          .where(and(
+            eq(alerts.id, alertId),
+            eq(alerts.userId, userId)
+          ));
+
+        res.json({ message: "Alert deleted" });
+      } catch (error: any) {
+        console.error("Delete alert error:", error);
+        res.status(500).json({ message: "Failed to delete alert" });
       }
     }
   );
@@ -11438,7 +11619,7 @@ ${dictionaryContext
         userTemplate,
         isActive: true,
         tags: selectedTables,
-        createdBy: "system", // TODO: Get actual user ID from session
+        createdBy: (req as any).user?.id || "system",
       });
 
       res.json({
@@ -12269,7 +12450,13 @@ ${contextInfo}
       }
 
       const databricksService = getAzureDatabricksService();
-      const result = await databricksService.executeQuery(processedSql, {}, { maxRows: maxRows || 1000 });
+      // For sample queries, use shorter timeout and smaller maxRows
+      const isSampleQuery = /LIMIT\s+\d+/i.test(processedSql) && processedSql.toUpperCase().startsWith('SELECT');
+      const queryOptions = {
+        maxRows: isSampleQuery ? Math.min(maxRows || 100, 500) : (maxRows || 1000),
+        timeout: isSampleQuery ? 60000 : undefined, // 1 minute for sample queries
+      };
+      const result = await databricksService.executeQuery(processedSql, {}, queryOptions);
 
       res.json({
         success: true,
@@ -12315,6 +12502,19 @@ ${contextInfo}
           errorMessage = String(error.error);
         } else {
           errorMessage = JSON.stringify(error);
+        }
+      }
+      
+      // Check for QUERY_RESULT_WRITE_TO_CLOUD_STORE_FAILED error
+      // If LIMIT exists but is too large, suggest smaller limit
+      if (errorMessage.includes('QUERY_RESULT_WRITE_TO_CLOUD_STORE_FAILED') || 
+          errorMessage.includes('WRITE_TO_CLOUD_STORE_FAILED')) {
+        const limitMatch = processedSql.match(/LIMIT\s+(\d+)/i);
+        if (limitMatch) {
+          const currentLimit = parseInt(limitMatch[1]);
+          if (currentLimit > 100) {
+            errorMessage = `${errorMessage}\n\n제안: LIMIT 값을 ${Math.min(100, Math.floor(currentLimit / 2))} 이하로 줄여보세요.`;
+          }
         }
       }
       
@@ -12951,14 +13151,45 @@ ${contextInfo}
     }
   });
 
-  // AI Search Management - Get indexers (placeholder)
+  // AI Search Management - Get indexers
   app.get("/api/azure/ai-search/indexers", async (req: any, res: any) => {
     try {
-      // TODO: Implement indexer listing when azure-search service supports it
+      const { getAzureSearchService } = await import("./services/azure-search.js");
+      const { azureConfigService } = await import("./services/azure-config.js");
+      
+      const searchConfig = azureConfigService.getAISearchConfig();
+      const indexName = searchConfig.indexName || "default-index";
+      const searchService = getAzureSearchService(indexName);
+      await searchService.initialize();
+
+      // Azure Search REST API를 통해 인덱서 목록 조회
+      const endpoint = searchConfig.endpoint;
+      const apiKey = searchConfig.apiKey;
+      
+      if (!endpoint || !apiKey) {
+        return res.status(400).json({
+          success: false,
+          error: "Azure Search endpoint and API key are required",
+        });
+      }
+
+      const indexersResponse = await fetch(`${endpoint}/indexers?api-version=2023-11-01`, {
+        method: 'GET',
+        headers: {
+          'api-key': apiKey,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!indexersResponse.ok) {
+        throw new Error(`Failed to fetch indexers: ${indexersResponse.statusText}`);
+      }
+
+      const indexersData = await indexersResponse.json();
+      
       res.json({
         success: true,
-        indexers: [],
-        message: "Indexer management coming soon",
+        indexers: indexersData.value || [],
       });
     } catch (error: any) {
       console.error("Failed to fetch AI Search indexers:", error);
@@ -12970,14 +13201,40 @@ ${contextInfo}
     }
   });
 
-  // AI Search Management - Get data sources (placeholder)
+  // AI Search Management - Get data sources
   app.get("/api/azure/ai-search/data-sources", async (req: any, res: any) => {
     try {
-      // TODO: Implement data source listing when azure-search service supports it
+      const { azureConfigService } = await import("./services/azure-config.js");
+      
+      const searchConfig = azureConfigService.getAISearchConfig();
+      const endpoint = searchConfig.endpoint;
+      const apiKey = searchConfig.apiKey;
+      
+      if (!endpoint || !apiKey) {
+        return res.status(400).json({
+          success: false,
+          error: "Azure Search endpoint and API key are required",
+        });
+      }
+
+      // Azure Search REST API를 통해 데이터소스 목록 조회
+      const dataSourcesResponse = await fetch(`${endpoint}/datasources?api-version=2023-11-01`, {
+        method: 'GET',
+        headers: {
+          'api-key': apiKey,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!dataSourcesResponse.ok) {
+        throw new Error(`Failed to fetch data sources: ${dataSourcesResponse.statusText}`);
+      }
+
+      const dataSourcesData = await dataSourcesResponse.json();
+      
       res.json({
         success: true,
-        dataSources: [],
-        message: "Data source management coming soon",
+        dataSources: dataSourcesData.value || [],
       });
     } catch (error: any) {
       console.error("Failed to fetch AI Search data sources:", error);

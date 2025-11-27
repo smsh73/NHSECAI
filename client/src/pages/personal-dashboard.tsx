@@ -350,7 +350,7 @@ export default function PersonalDashboard() {
         <TabsContent value="overview" className="space-y-6" data-testid="overview-content">
           {/* 빠른 액션 카드 */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <Card className="cursor-pointer hover:bg-muted/50 transition-colors" data-testid="quick-action-holdings">
+            <Card className="cursor-pointer" data-testid="quick-action-holdings">
               <CardContent className="p-6">
                 <div className="flex items-center justify-between">
                   <div>
@@ -364,14 +364,14 @@ export default function PersonalDashboard() {
                     <div className="text-sm text-muted-foreground">보유종목</div>
                   </div>
                 </div>
-                <Button className="w-full mt-4" variant="outline">
+                <Button className="w-full mt-4 h-10" variant="outline">
                   <ArrowRight className="h-4 w-4 mr-2" />
                   자세히 보기
                 </Button>
               </CardContent>
             </Card>
 
-            <Card className="cursor-pointer hover:bg-muted/50 transition-colors" data-testid="quick-action-trades">
+            <Card className="cursor-pointer" data-testid="quick-action-trades">
               <CardContent className="p-6">
                 <div className="flex items-center justify-between">
                   <div>
@@ -385,14 +385,14 @@ export default function PersonalDashboard() {
                     <div className="text-sm text-muted-foreground">총 수익률</div>
                   </div>
                 </div>
-                <Button className="w-full mt-4" variant="outline">
+                <Button className="w-full mt-4 h-10" variant="outline">
                   <TrendingUp className="h-4 w-4 mr-2" />
                   분석 보기
                 </Button>
               </CardContent>
             </Card>
 
-            <Card className="cursor-pointer hover:bg-muted/50 transition-colors" data-testid="quick-action-watchlist">
+            <Card className="cursor-pointer" data-testid="quick-action-watchlist">
               <CardContent className="p-6">
                 <div className="flex items-center justify-between">
                   <div>
@@ -406,7 +406,7 @@ export default function PersonalDashboard() {
                     <div className="text-sm text-muted-foreground">등록종목</div>
                   </div>
                 </div>
-                <Button className="w-full mt-4" variant="outline">
+                <Button className="w-full mt-4 h-10" variant="outline">
                   <Star className="h-4 w-4 mr-2" />
                   관리하기
                 </Button>

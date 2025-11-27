@@ -93,11 +93,11 @@ export class WorkflowExecutionEngine {
       detailedLogger.error({
         service: 'WorkflowExecutionEngine',
         task: 'createWorkflowSession',
-        message: `워크플로우 세션 생성 실패: ${errorMessage}`,
-        error: error instanceof Error ? error : new Error(errorMessage),
+        message: `워크플로우 세션 생성 실패: ${errMsg}`,
+        error: error instanceof Error ? error : new Error(errMsg),
         severity: 'HIGH'
       });
-      throw error instanceof Error ? error : new Error(errorMessage);
+      throw error instanceof Error ? error : new Error(errMsg);
     }
   }
 
@@ -188,7 +188,7 @@ export class WorkflowExecutionEngine {
 
       try {
         // 에러 정보를 PostgreSQL에 저장
-        await this.saveNodeOutputToSession(sessionId, nodeId, { error: errorMessage }, workflowDefinition.workflowId);
+        await this.saveNodeOutputToSession(sessionId, nodeId, { error: errMsg }, workflowDefinition.workflowId);
 
         // 실행 기록 저장 (실패)
         await this.saveNodeExecution(
@@ -199,7 +199,7 @@ export class WorkflowExecutionEngine {
           'failed',
           null,
           null,
-          errorMessage,
+          errMsg,
           executionTime,
           new Date(),
           new Date(nodeEndTime)
@@ -218,8 +218,8 @@ export class WorkflowExecutionEngine {
       detailedLogger.error({
         service: 'WorkflowExecutionEngine',
         task: 'executeSingleNode',
-        message: `노드 실행 실패: ${errorMessage}`,
-        error: error instanceof Error ? error : new Error(errorMessage),
+        message: `노드 실행 실패: ${errMsg}`,
+        error: error instanceof Error ? error : new Error(errMsg),
         severity: 'HIGH',
         metadata: { sessionId, nodeId }
       });
@@ -591,10 +591,54 @@ export class WorkflowExecutionEngine {
       case 'data_aggregator':
         output = input || {};
         break;
-      // 에디터 템플릿 호환: 간단 RAG 자리표시자
+      // RAG 검색 노드 실행
       case 'rag': {
-        const cfg: any = (node as any).configuration || (node as any).data || {};
-        output = { query: cfg.query || '', input };
+        const cfg: any = (node as any).configuration || (node as any).data?.config || (node as any).data || {};
+        const ragSchemaId = cfg.ragSchemaId;
+        const searchIndexName = cfg.searchIndexName;
+        const searchType = cfg.searchType || 'hybrid';
+        const topK = cfg.topK || 10;
+        const threshold = cfg.threshold || 0.7;
+        
+        // 쿼리 추출 (입력에서 또는 설정에서)
+        let query = '';
+        if (typeof input === 'string') {
+          query = input;
+        } else if (input && typeof input === 'object') {
+          query = (input as any).query || (input as any).searchQuery || cfg.query || '';
+        } else {
+          query = cfg.query || '';
+        }
+        
+        if (!query) {
+          throw new Error('RAG 노드에 검색 쿼리가 필요합니다.');
+        }
+        
+        if (!searchIndexName) {
+          throw new Error('RAG 노드에 검색 인덱스 이름이 필요합니다.');
+        }
+        
+        // RAG 검색 서비스 사용
+        const { ragSearchService } = await import('./rag-search-service.js');
+        const searchResults = await ragSearchService.search({
+          query,
+          indexName: searchIndexName,
+          topK,
+          searchMode: searchType as 'vector' | 'keyword' | 'hybrid',
+        });
+        
+        // 임계값 필터링
+        const filteredResults = searchResults.results.filter((r: any) => r.score >= threshold);
+        
+        output = {
+          query,
+          results: filteredResults,
+          totalCount: filteredResults.length,
+          searchIndexName,
+          searchType,
+          topK,
+          threshold,
+        };
         break;
       }
       case 'python_script':
@@ -855,7 +899,7 @@ export class WorkflowExecutionEngine {
     } catch (error) {
       const errMsg = error instanceof Error ? error.message : String(error);
       console.error('테마 분류 실행 오류:', error);
-      throw new Error(`테마 분류 실행 실패: ${errorMessage || 'Unknown error'}`);
+      throw new Error(`테마 분류 실행 실패: ${errMsg || 'Unknown error'}`);
     }
   }
 
@@ -864,12 +908,17 @@ export class WorkflowExecutionEngine {
     const alertType = config.alertType || 'info';
     const message = config.message || '';
     const condition = config.condition || '';
+    const userId = config.userId || context.metadata?.userId;
+    const priority = config.priority || 'normal';
+    const category = config.category || 'workflow';
+    const actionUrl = config.actionUrl;
+    const actionLabel = config.actionLabel;
     
     // 조건 확인
     if (condition) {
       try {
-        // 조건 평가 (간단한 JavaScript 표현식)
-        const conditionMet = eval(condition);
+        // 안전한 조건 평가
+        const conditionMet = this.evaluateExpression(condition, input);
         if (!conditionMet) {
           return {
             alert: null,
@@ -880,14 +929,22 @@ export class WorkflowExecutionEngine {
         }
       } catch (error) {
         const errMsg = error instanceof Error ? error.message : String(error);
-        console.warn('알림 조건 평가 오류:', errorMessage);
+        console.warn('알림 조건 평가 오류:', errMsg);
       }
+    }
+
+    // 알림 메시지 생성 (템플릿 변수 치환)
+    let finalMessage = message || JSON.stringify(input);
+    if (message && input) {
+      finalMessage = message.replace(/\{(\w+)\}/g, (match: string, key: string) => {
+        return input[key] !== undefined ? String(input[key]) : match;
+      });
     }
 
     // 알림 생성
     const alert = {
       type: alertType,
-      message: message || JSON.stringify(input),
+      message: finalMessage,
       timestamp: new Date().toISOString(),
       workflowId: context.workflowId,
       sessionId: context.sessionId,
@@ -895,9 +952,43 @@ export class WorkflowExecutionEngine {
       data: input
     };
 
+    // 데이터베이스에 알림 저장 (userId가 있는 경우)
+    if (userId) {
+      try {
+        const { db } = await import('../db.js');
+        const { alerts } = await import('../../shared/schema.js');
+        const { insertAlertSchema } = await import('../../shared/schema.js');
+        
+        const alertData = insertAlertSchema.parse({
+          userId,
+          title: config.title || `워크플로우 알림: ${node.name || node.id}`,
+          message: finalMessage,
+          type: alertType,
+          priority,
+          category,
+          relatedResourceType: 'workflow',
+          relatedResourceId: context.workflowId,
+          actionUrl,
+          actionLabel,
+          metadata: {
+            workflowId: context.workflowId,
+            sessionId: context.sessionId,
+            nodeId: node.id,
+            nodeName: node.name,
+            input: input
+          }
+        });
+        
+        await db.insert(alerts).values(alertData);
+      } catch (error) {
+        console.error('알림 저장 실패:', error);
+        // 알림 저장 실패해도 워크플로우는 계속 진행
+      }
+    }
+
     // WebSocket을 통해 알림 브로드캐스트 (가능한 경우)
     try {
-      const { websocketService } = await import('../index.js');
+      const { websocketService } = await import('../services/websocket.js');
       if (websocketService && typeof websocketService.broadcast === 'function') {
         websocketService.broadcast({
           type: 'workflow_alert',

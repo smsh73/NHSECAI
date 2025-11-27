@@ -5947,30 +5947,142 @@ export const benchmarkTestResults = pgTable("benchmark_test_results", {
   id: varchar("id", { length: 36 }).primaryKey().default(sql`gen_random_uuid()::text`),
   
   // 테스트 정보
+  testId: varchar("test_id", { length: 100 }), // 개별 테스트 ID
   testName: varchar("test_name", { length: 255 }).notNull(),
-  testType: varchar("test_type", { length: 50 }).notNull(), // ADVERSARIAL, SECURITY, PERFORMANCE, ACCURACY
+  testType: varchar("test_type", { length: 50 }), // ADVERSARIAL, SECURITY, PERFORMANCE, ACCURACY
+  testCategory: varchar("test_category", { length: 100 }), // PROMPT_INJECTION, JAILBREAK, etc.
+  testSuite: varchar("test_suite", { length: 255 }), // 테스트 스위트 이름
   testDescription: text("test_description"),
   
+  // 테스트 입력
+  prompt: text("prompt"), // 테스트 프롬프트
+  expectedBlock: boolean("expected_block").default(false), // 예상 차단 여부
+  actualBlock: boolean("actual_block").default(false), // 실제 차단 여부
+  passed: boolean("passed").default(false), // 테스트 통과 여부
+  
+  // 탐지 정보
+  detectionType: varchar("detection_type", { length: 100 }), // 탐지 유형
+  detectionConfidence: doublePrecision("detection_confidence"), // 탐지 신뢰도 (0-1)
+  
   // 테스트 결과
-  testResults: jsonb("test_results").notNull(), // 테스트 결과 JSON
-  totalTests: integer("total_tests").notNull(),
-  passedTests: integer("passed_tests").notNull().default(0),
-  failedTests: integer("failed_tests").notNull().default(0),
+  testResults: jsonb("test_results"), // 전체 테스트 결과 JSON (스위트 레벨)
+  testDetails: jsonb("test_details"), // 개별 테스트 상세 정보
+  totalTests: integer("total_tests"), // 전체 테스트 수 (스위트 레벨)
+  passedTests: integer("passed_tests").default(0), // 통과한 테스트 수
+  failedTests: integer("failed_tests").default(0), // 실패한 테스트 수
   passRate: doublePrecision("pass_rate"), // 통과율 (0-1)
   
   // 테스트 실행 정보
   executedBy: varchar("executed_by", { length: 36 }).references(() => users.id),
   executedAt: timestamp("executed_at").notNull().defaultNow(),
-  executionTime: integer("execution_time_ms"), // 실행 시간 (밀리초)
+  executionTime: integer("execution_time_ms"), // 실행 시간 (밀리초) - 스위트 레벨
+  executionTimeMs: integer("execution_time_ms_individual"), // 개별 테스트 실행 시간
   
   // 추가 정보
   metadata: jsonb("metadata"),
   
   createdAt: timestamp("created_at").notNull().defaultNow(),
 }, (table) => ({
+  testIdIdx: index("benchmark_test_results_test_id_idx").on(table.testId),
   testNameIdx: index("benchmark_test_results_test_name_idx").on(table.testName),
   testTypeIdx: index("benchmark_test_results_test_type_idx").on(table.testType),
+  testCategoryIdx: index("benchmark_test_results_test_category_idx").on(table.testCategory),
+  testSuiteIdx: index("benchmark_test_results_test_suite_idx").on(table.testSuite),
   executedAtIdx: index("benchmark_test_results_executed_at_idx").on(table.executedAt),
+}));
+
+// 알림(Alerts) 테이블
+export const alerts = pgTable("alerts", {
+  id: varchar("id", { length: 36 }).primaryKey().default(sql`gen_random_uuid()::text`),
+  userId: varchar("user_id", { length: 36 }).notNull().references(() => users.id),
+  
+  // 알림 정보
+  title: varchar("title", { length: 255 }).notNull(),
+  message: text("message").notNull(),
+  type: varchar("type", { length: 50 }).notNull().default("info"), // info, warning, error, success
+  priority: varchar("priority", { length: 20 }).notNull().default("normal"), // low, normal, high, urgent
+  
+  // 알림 카테고리
+  category: varchar("category", { length: 100 }), // market, portfolio, news, system, etc.
+  
+  // 관련 리소스
+  relatedResourceType: varchar("related_resource_type", { length: 50 }), // news, trade, analysis, etc.
+  relatedResourceId: varchar("related_resource_id", { length: 36 }),
+  
+  // 읽음 상태
+  isRead: boolean("is_read").notNull().default(false),
+  readAt: timestamp("read_at"),
+  
+  // 액션 정보
+  actionUrl: text("action_url"), // 클릭 시 이동할 URL
+  actionLabel: varchar("action_label", { length: 100 }), // 액션 버튼 라벨
+  
+  // 추가 정보
+  metadata: jsonb("metadata"),
+  
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  expiresAt: timestamp("expires_at"), // 만료 시간 (선택사항)
+}, (table) => ({
+  userIdIdx: index("alerts_user_id_idx").on(table.userId),
+  isReadIdx: index("alerts_is_read_idx").on(table.isRead),
+  typeIdx: index("alerts_type_idx").on(table.type),
+  categoryIdx: index("alerts_category_idx").on(table.category),
+  createdAtIdx: index("alerts_created_at_idx").on(table.createdAt),
+  userIdIsReadIdx: index("alerts_user_id_is_read_idx").on(table.userId, table.isRead),
+}));
+
+// 북마크(Bookmarks) 테이블
+export const bookmarks = pgTable("bookmarks", {
+  id: varchar("id", { length: 36 }).primaryKey().default(sql`gen_random_uuid()::text`),
+  userId: varchar("user_id", { length: 36 }).notNull().references(() => users.id),
+  
+  // 북마크 정보
+  contentType: varchar("content_type", { length: 50 }).notNull(), // news, analysis, recommendation, etc.
+  contentId: varchar("content_id", { length: 36 }).notNull(),
+  
+  // 북마크 메타데이터
+  title: varchar("title", { length: 255 }), // 북마크 제목 (캐시용)
+  notes: text("notes"), // 사용자 메모
+  
+  // 태그
+  tags: text("tags").array(), // 북마크 태그
+  
+  // 추가 정보
+  metadata: jsonb("metadata"),
+  
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+}, (table) => ({
+  userIdIdx: index("bookmarks_user_id_idx").on(table.userId),
+  contentTypeIdx: index("bookmarks_content_type_idx").on(table.contentType),
+  contentIdIdx: index("bookmarks_content_id_idx").on(table.contentId),
+  userIdContentTypeIdx: index("bookmarks_user_id_content_type_idx").on(table.userId, table.contentType),
+  uniqueUserContentIdx: uniqueIndex("bookmarks_user_content_unique_idx").on(table.userId, table.contentType, table.contentId),
+}));
+
+// AI 챗 메시지 테이블 (기존 etfChatMessages와 별도로 일반 AI 챗용)
+export const aiChatMessages = pgTable("ai_chat_messages", {
+  id: varchar("id", { length: 36 }).primaryKey().default(sql`gen_random_uuid()::text`),
+  sessionId: varchar("session_id", { length: 36 }).notNull(),
+  userId: varchar("user_id", { length: 36 }).references(() => users.id),
+  
+  // 메시지 정보
+  role: varchar("role", { length: 20 }).notNull(), // user, assistant, system
+  content: text("content").notNull(),
+  
+  // 도구 사용 정보
+  tools: jsonb("tools"), // 사용된 도구 목록
+  toolResults: jsonb("tool_results"), // 도구 실행 결과
+  
+  // 메타데이터
+  metadata: jsonb("metadata"),
+  
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+}, (table) => ({
+  sessionIdIdx: index("ai_chat_messages_session_id_idx").on(table.sessionId),
+  userIdIdx: index("ai_chat_messages_user_id_idx").on(table.userId),
+  createdAtIdx: index("ai_chat_messages_created_at_idx").on(table.createdAt),
+  sessionIdCreatedAtIdx: index("ai_chat_messages_session_created_idx").on(table.sessionId, table.createdAt),
 }));
 
 // Type exports for Data Sources
@@ -6008,6 +6120,12 @@ export type AdversarialAttackEvent = typeof adversarialAttackEvents.$inferSelect
 export type InsertAdversarialAttackEvent = typeof adversarialAttackEvents.$inferInsert;
 export type BenchmarkTestResult = typeof benchmarkTestResults.$inferSelect;
 export type InsertBenchmarkTestResult = typeof benchmarkTestResults.$inferInsert;
+export type Alert = typeof alerts.$inferSelect;
+export type InsertAlert = typeof alerts.$inferInsert;
+export type Bookmark = typeof bookmarks.$inferSelect;
+export type InsertBookmark = typeof bookmarks.$inferInsert;
+export type AiChatMessage = typeof aiChatMessages.$inferSelect;
+export type InsertAiChatMessage = typeof aiChatMessages.$inferInsert;
 
 // Insert schemas for validation
 export const insertApplicationLogSchema = createInsertSchema(applicationLogs);
@@ -6027,6 +6145,9 @@ export const insertRagDataProcessingLogSchema = createInsertSchema(ragDataProces
 export const insertSystemKillswitchSchema = createInsertSchema(systemKillswitch);
 export const insertAdversarialAttackEventSchema = createInsertSchema(adversarialAttackEvents);
 export const insertBenchmarkTestResultSchema = createInsertSchema(benchmarkTestResults);
+export const insertAlertSchema = createInsertSchema(alerts);
+export const insertBookmarkSchema = createInsertSchema(bookmarks);
+export const insertAiChatMessageSchema = createInsertSchema(aiChatMessages);
 
 // Relations for Data Sources
 export const dataSourcesRelations = relations(dataSources, ({ one, many }) => ({

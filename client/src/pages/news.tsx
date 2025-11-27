@@ -21,6 +21,7 @@ import {
 import { Link, useLocation } from 'wouter';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
+import { DataBadge } from '@/components/common/data-badge';
 
 interface NewsItem {
   id: string;
@@ -50,6 +51,8 @@ interface NewsItem {
   isProcessed?: boolean;
   isFiltered?: boolean;
   isHighQuality?: boolean;
+  isMock?: boolean;
+  isSample?: boolean;
 }
 
 interface NewsListResponse {
@@ -132,25 +135,35 @@ function NewsCard({ item }: { item: NewsItem }) {
       "group relative overflow-hidden cursor-pointer transition-all duration-300",
       "hover:shadow-lg hover:-translate-y-0.5",
       "bg-card border border-black/10 dark:border-white/10",
-      "shadow-sm"
+      "shadow-sm",
+      (item.isMock || item.isSample) && "opacity-90"
     )}>
       <CardContent className="p-6">
         <div className="flex items-start justify-between mb-4">
           <div className="flex-1 min-w-0">
-            <h3 className="font-semibold text-foreground mb-2 line-clamp-2 group-hover:text-primary transition-colors">
+            <h3 className={cn(
+              "font-semibold text-foreground mb-2 line-clamp-2 group-hover:text-primary transition-colors",
+              (item.isMock || item.isSample) && "italic"
+            )}>
               {item.title}
             </h3>
             {item.summary && (
-              <p className="text-sm text-muted-foreground line-clamp-2 leading-relaxed mb-3">
+              <p className={cn(
+                "text-sm text-muted-foreground line-clamp-2 leading-relaxed mb-3",
+                (item.isMock || item.isSample) && "italic"
+              )}>
                 {item.summary}
               </p>
             )}
           </div>
-          {item.isHighQuality && (
-            <Badge className="ml-2 bg-emerald-500 hover:bg-emerald-600 text-white text-xs">
-              고품질
-            </Badge>
-          )}
+          <div className="flex items-center gap-2 ml-2">
+            {item.isHighQuality && (
+              <Badge className="bg-emerald-500 hover:bg-emerald-600 text-white text-xs">
+                고품질
+              </Badge>
+            )}
+            <DataBadge isMock={item.isMock} isSample={item.isSample} />
+          </div>
         </div>
 
         <div className="flex flex-wrap items-center gap-2 mb-4">

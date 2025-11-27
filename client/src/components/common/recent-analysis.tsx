@@ -7,10 +7,11 @@ import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { ArrowRight, Sparkles, X, ExternalLink, Loader2 } from 'lucide-react';
+import { ArrowRight, Sparkles, X, ExternalLink, Loader2, BarChart3 } from 'lucide-react';
 import { Link } from 'wouter';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
+import { DataBadge } from '@/components/common/data-badge';
 
 interface AnalysisItem {
   id: string;
@@ -24,6 +25,8 @@ interface AnalysisItem {
   tags?: string[];
   isNew?: boolean;
   newsIds?: string[];
+  isMock?: boolean;
+  isSample?: boolean;
   metadata?: {
     newsCount?: number;
     generatedAt?: string;
@@ -201,10 +204,9 @@ function AnalysisCard({ item }: { item: AnalysisItem }) {
 
   return (
     <Card className={cn(
-      "group relative overflow-hidden cursor-pointer transition-all duration-300",
-      "hover:shadow-lg hover:-translate-y-1",
-      "bg-card border border-black/10 dark:border-white/10",
-      "shadow-sm"
+      "group relative overflow-hidden cursor-pointer",
+      "bg-card border",
+      (item.isMock || item.isSample) && "opacity-90"
     )}>
       
       {/* New Badge */}
@@ -220,10 +222,19 @@ function AnalysisCard({ item }: { item: AnalysisItem }) {
         {/* Header */}
         <div className="flex items-start justify-between mb-4">
           <div className="flex-1 min-w-0">
-            <h3 className="font-semibold text-foreground mb-2 line-clamp-2 group-hover:text-primary transition-colors">
-              {item.title}
-            </h3>
-            <p className="text-sm text-muted-foreground line-clamp-2 leading-relaxed">
+            <div className="flex items-center gap-2 mb-2">
+              <h3 className={cn(
+                "font-semibold text-foreground line-clamp-2 group-hover:text-primary transition-colors",
+                (item.isMock || item.isSample) && "italic"
+              )}>
+                {item.title}
+              </h3>
+              <DataBadge isMock={item.isMock} isSample={item.isSample} />
+            </div>
+            <p className={cn(
+              "text-sm text-muted-foreground line-clamp-2 leading-relaxed",
+              (item.isMock || item.isSample) && "italic"
+            )}>
               {item.summary}
             </p>
           </div>
@@ -256,7 +267,7 @@ function AnalysisCard({ item }: { item: AnalysisItem }) {
         )}
 
         {/* Footer */}
-        <div className="flex items-center justify-between pt-4 border-t border-black/10 dark:border-white/10">
+        <div className="flex items-center justify-between pt-4 border-t">
           <div className="flex items-center space-x-3">
             <Badge className={cn("text-xs font-medium", typeInfo.color)}>
               {typeInfo.label}
@@ -298,9 +309,9 @@ function AnalysisCard({ item }: { item: AnalysisItem }) {
 
 function EmptyState() {
   return (
-    <Card className="text-center p-12 bg-card border border-black/10 dark:border-white/10">
-      <div className="mx-auto w-16 h-16 bg-muted rounded-full flex items-center justify-center mb-4">
-        <div className="text-2xl font-bold text-muted-foreground">📊</div>
+    <Card className="text-center p-12 bg-card border">
+      <div className="mx-auto w-16 h-16 bg-muted rounded flex items-center justify-center mb-4">
+        <BarChart3 className="w-8 h-8 text-muted-foreground" />
       </div>
       <h3 className="text-lg font-semibold text-foreground mb-2">
         분석 결과가 없습니다
@@ -309,7 +320,7 @@ function EmptyState() {
         AI 시황 생성을 시작하여 첫 번째 분석을 만들어보세요
       </p>
       <Link href="/macro-analysis">
-        <Button>
+        <Button className="h-10 px-6">
           AI 시황 생성 시작
         </Button>
       </Link>
@@ -456,16 +467,16 @@ export function RecentAnalysis({
             <Button 
               onClick={handleGenerateAnalysis}
               disabled={isGenerating || generateAnalysisMutation.isPending}
-              className="gap-2"
+              className="h-10 px-6"
             >
               {isGenerating || generateAnalysisMutation.isPending ? (
                 <>
-                  <Loader2 className="w-4 h-4 animate-spin" />
+                  <Loader2 className="w-4 h-4 mr-2" />
                   분석 생성 중...
                 </>
               ) : (
                 <>
-                  <Sparkles className="w-4 h-4" />
+                  <Sparkles className="w-4 h-4 mr-2" />
                   분석 생성
                 </>
               )}
@@ -483,11 +494,9 @@ export function RecentAnalysis({
         ) : transformedAnalysis.length > 0 ? (
           <>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
-              {transformedAnalysis.map((item, index) => (
+              {transformedAnalysis.map((item) => (
                 <div 
                   key={item.id}
-                  className="animate-fade-in"
-                  style={{ animationDelay: `${index * 100}ms` }}
                   data-testid={`analysis-card-${item.id}`}
                 >
                   <AnalysisCard item={item} />

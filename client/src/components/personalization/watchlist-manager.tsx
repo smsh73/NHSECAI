@@ -12,6 +12,7 @@ import { useState } from "react";
 import { Star, StarOff, Bell, BellOff, Plus, Trash2, Search, TrendingUp, TrendingDown } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { z } from "zod";
+import { DataBadge } from "@/components/common/data-badge";
 
 const addWatchlistSchema = z.object({
   symbol: z.string().min(1, "종목코드를 입력해주세요"),
@@ -35,6 +36,8 @@ interface WatchlistManagerProps {
     newsAlert: boolean;
     addedAt: string;
     theme?: string;
+    isMock?: boolean;
+    isSample?: boolean;
   }>;
   onAddToWatchlist: (data: AddWatchlistFormData) => Promise<void>;
   onRemoveFromWatchlist: (id: string) => Promise<void>;
@@ -291,17 +294,23 @@ export function WatchlistManager({
             filteredWatchlist.map((item) => (
               <div
                 key={item.id}
-                className="flex items-center justify-between p-4 border rounded-lg hover:bg-muted/50 transition-colors"
+                className={cn(
+                  "flex items-center justify-between p-4 border rounded-lg hover:bg-muted/50 transition-colors",
+                  (item.isMock || item.isSample) && "italic opacity-90"
+                )}
                 data-testid={`watchlist-item-${item.symbol}`}
               >
                 <div className="flex items-center space-x-4">
                   <div>
                     <div className="flex items-center space-x-2">
-                      <span className="font-medium">{item.symbolName}</span>
+                      <span className={cn("font-medium", (item.isMock || item.isSample) && "italic")}>
+                        {item.symbolName}
+                      </span>
                       <Badge variant="outline" className="text-xs">{item.symbol}</Badge>
                       {item.theme && (
                         <Badge variant="secondary" className="text-xs">{item.theme}</Badge>
                       )}
+                      <DataBadge isMock={item.isMock} isSample={item.isSample} />
                     </div>
                     <div className="text-sm text-muted-foreground">
                       추가일: {new Date(item.addedAt).toLocaleDateString()}
@@ -311,7 +320,7 @@ export function WatchlistManager({
 
                 <div className="flex items-center space-x-6">
                   {/* 현재가 및 변동률 */}
-                  <div className="text-right">
+                  <div className={cn("text-right", (item.isMock || item.isSample) && "italic")}>
                     <div className="font-medium">{formatCurrency(item.currentPrice)}</div>
                     <div className={cn(
                       "text-sm flex items-center",

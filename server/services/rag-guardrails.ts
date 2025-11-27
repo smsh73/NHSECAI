@@ -438,6 +438,58 @@ export class RAGGuardrailsService {
 
     return sanitized.trim();
   }
+
+  /**
+   * 에러 메시지 필터링 (중요정보/AI모델 정보 노출 방지)
+   */
+  sanitizeErrorMessage(errorMessage: string): string {
+    let sanitized = errorMessage;
+
+    // 시스템 정보 패턴 제거
+    const systemInfoPatterns = [
+      /api.*key.*:.*[a-zA-Z0-9]+/gi,
+      /endpoint.*:.*https?:\/\//gi,
+      /database.*password/gi,
+      /secret.*:.*[a-zA-Z0-9]+/gi,
+      /connection.*string/gi,
+      /connectionString/gi,
+    ];
+
+    for (const pattern of systemInfoPatterns) {
+      sanitized = sanitized.replace(pattern, "[시스템 정보 제거됨]");
+    }
+
+    // AI 모델 정보 패턴 제거
+    const modelInfoPatterns = [
+      /gpt-[\d.]+/gi,
+      /text-embedding-[\d.]+/gi,
+      /model.*version.*:.*[\d.]+/gi,
+      /deployment.*name.*:.*[a-zA-Z0-9-]+/gi,
+      /azure.*openai/gi,
+      /openai.*api/gi,
+    ];
+
+    for (const pattern of modelInfoPatterns) {
+      sanitized = sanitized.replace(pattern, "[모델 정보 제거됨]");
+    }
+
+    // 스택 트레이스 제거
+    sanitized = sanitized.replace(/at\s+.*\(.*\)/g, "");
+    sanitized = sanitized.replace(/Error:\s*/gi, "오류: ");
+    sanitized = sanitized.replace(/Exception:\s*/gi, "예외: ");
+
+    // 개인정보 패턴 제거
+    for (const pattern of this.piiPatterns) {
+      sanitized = sanitized.replace(pattern, "[개인정보 제거됨]");
+    }
+
+    // 중요정보 패턴 제거
+    for (const pattern of this.sensitiveInfoPatterns) {
+      sanitized = sanitized.replace(pattern, "[중요정보 제거됨]");
+    }
+
+    return sanitized.trim() || "오류가 발생했습니다. 잠시 후 다시 시도해주세요.";
+  }
 }
 
 export const ragGuardrailsService = new RAGGuardrailsService();

@@ -21,6 +21,8 @@ import {
   nl2sqlPrompts, schemaSources, dictionaries, dictionaryEntries,
   // Data Source entities
   dataSources, sqlQueries,
+  // New entities
+  alerts, bookmarks, aiChatMessages,
   type User, type InsertUser, type Workflow, type InsertWorkflow, type WorkflowFolder, type InsertWorkflowFolder,
   type Prompt, type InsertPrompt, type PythonScript, type InsertPythonScript, type ApiCall, type InsertApiCall,
   type Schedule, type InsertSchedule, type WorkflowExecution, type InsertWorkflowExecution,
@@ -98,6 +100,10 @@ import {
   // Data Source types
   type DataSource, type InsertDataSource,
   type SqlQuery, type InsertSqlQuery,
+  // New types
+  type Alert, type InsertAlert,
+  type Bookmark, type InsertBookmark,
+  type AiChatMessage, type InsertAiChatMessage,
   // Azure Config types
   type AzureConfig, type InsertAzureConfig,
   azureConfigs
@@ -1534,6 +1540,24 @@ export class DatabaseStorage implements IStorage {
 
   async createUser(insertUser: InsertUser): Promise<User> {
     const [user] = await db.insert(users).values(insertUser).returning();
+    
+    // Create default user risk profile
+    try {
+      const { userRiskProfile } = await import("@shared/schema");
+      await db.insert(userRiskProfile).values({
+        userId: user.id,
+        riskTolerance: 'moderate',
+        investmentHorizon: 'medium',
+        investmentExperience: 'intermediate',
+        financialGoals: [],
+        constraints: [],
+        preferences: {},
+      });
+    } catch (error) {
+      console.error('Failed to create default user risk profile:', error);
+      // Don't fail user creation if profile creation fails
+    }
+    
     return user;
   }
 
@@ -7141,23 +7165,61 @@ ${JSON.stringify(tradingVolumeAnalysis, null, 2)}
       
       const newsData = await this.searchNewsData(newsFilters);
       
-      // TODO: Add bookmark checking (would need bookmark table)
-      // TODO: Add relevance scoring based on user preferences
-      
-      return newsData.map(news => ({
-        id: news.id,
-        title: news.title,
-        summary: news.summary || news.content.substring(0, 200) + '...',
-        source: news.source || 'Unknown',
-        publishedAt: news.publishedAt.toISOString(),
-        sentiment: news.sentiment as any || 'neutral',
-        relevantSymbols: news.relevantSymbols || [],
-        marketScore: Number(news.marketScore || 0),
-        economicScore: Number(news.economicScore || 0),
-        themeName: undefined, // Would need theme lookup
-        isBookmarked: false, // Would need bookmark table
-        url: undefined
-      })).slice(0, filters?.limit || 20);
+      // Get user bookmarks
+      const userBookmarks = await db.select()
+        .from(bookmarks)
+        .where(and(
+          eq(bookmarks.userId, userId),
+          eq(bookmarks.contentType, 'news')
+        ));
+      const bookmarkedNewsIds = new Set(userBookmarks.map(b => b.contentId));
+
+      // Get user preferences for relevance scoring
+      const userTags = await this.getUserTags(userId);
+      const preferredSymbols = userTags
+        .filter(tag => tag.category === 'symbol')
+        .map(tag => tag.tag);
+      const preferredThemes = userTags
+        .filter(tag => tag.category === 'theme')
+        .map(tag => tag.tag);
+
+      return newsData.map(news => {
+        // Calculate relevance score based on user preferences
+        let relevanceScore = 0;
+        if (preferredSymbols.length > 0 && news.relevantSymbols) {
+          const matchingSymbols = news.relevantSymbols.filter((s: string) => 
+            preferredSymbols.some(ps => s.includes(ps) || ps.includes(s))
+          );
+          relevanceScore += matchingSymbols.length * 0.3;
+        }
+        if (preferredThemes.length > 0 && news.relevantThemes) {
+          const matchingThemes = news.relevantThemes.filter((t: string) => 
+            preferredThemes.includes(t)
+          );
+          relevanceScore += matchingThemes.length * 0.2;
+        }
+        if (bookmarkedNewsIds.has(news.id)) {
+          relevanceScore += 0.5; // Boost bookmarked items
+        }
+
+        return {
+          id: news.id,
+          title: news.title,
+          summary: news.summary || news.content.substring(0, 200) + '...',
+          source: news.source || 'Unknown',
+          publishedAt: news.publishedAt.toISOString(),
+          sentiment: news.sentiment as any || 'neutral',
+          relevantSymbols: news.relevantSymbols || [],
+          marketScore: Number(news.marketScore || 0),
+          economicScore: Number(news.economicScore || 0),
+          themeName: news.relevantThemes?.[0] || undefined,
+          isBookmarked: bookmarkedNewsIds.has(news.id),
+          relevanceScore,
+          url: undefined
+        };
+      })
+      .sort((a, b) => b.relevanceScore - a.relevanceScore)
+      .slice(0, filters?.limit || 20);
     } catch (error) {
       console.error('Error getting personalized news:', error);
       return [];
@@ -7165,28 +7227,53 @@ ${JSON.stringify(tradingVolumeAnalysis, null, 2)}
   }
 
   async bookmarkNews(userId: string, newsId: string): Promise<any> {
-    // TODO: Implement bookmark table and logic
-    return {
-      id: Math.random().toString(),
-      userId,
-      newsId,
-      createdAt: new Date()
-    };
+    try {
+      // Get news title for bookmark
+      const news = await db.select().from(newsData).where(eq(newsData.id, newsId)).limit(1);
+      const newsTitle = news[0]?.title || 'Untitled News';
+
+      // Check if bookmark already exists
+      const existing = await db.select()
+        .from(bookmarks)
+        .where(and(
+          eq(bookmarks.userId, userId),
+          eq(bookmarks.contentType, 'news'),
+          eq(bookmarks.contentId, newsId)
+        ))
+        .limit(1);
+
+      if (existing.length > 0) {
+        return existing[0];
+      }
+
+      // Create new bookmark
+      const [bookmark] = await db.insert(bookmarks)
+        .values({
+          userId,
+          contentType: 'news',
+          contentId: newsId,
+          title: newsTitle,
+        } as InsertBookmark)
+        .returning();
+
+      return bookmark;
+    } catch (error) {
+      console.error('Failed to bookmark news:', error);
+      throw error;
+    }
   }
 
   async removeNewsBookmark(userId: string, newsId: string): Promise<void> {
-    // Note: Bookmark table is not yet implemented in schema
-    // This is a placeholder implementation that can be enhanced when bookmark table is added
     try {
-      // For now, we just log the removal request
-      // When bookmark table is implemented, it should be:
-      // await db.delete(bookmarks).where(and(eq(bookmarks.userId, userId), eq(bookmarks.newsId, newsId)));
-      console.log(`Bookmark removal requested: user ${userId}, news ${newsId}`);
-      // Return successfully for now to avoid breaking existing code
-      return;
+      await db.delete(bookmarks)
+        .where(and(
+          eq(bookmarks.userId, userId),
+          eq(bookmarks.contentType, 'news'),
+          eq(bookmarks.contentId, newsId)
+        ));
     } catch (error) {
       console.error('Failed to remove bookmark:', error);
-      // Don't throw error to maintain backward compatibility
+      throw error;
     }
   }
 
@@ -7437,7 +7524,9 @@ ${JSON.stringify(tradingVolumeAnalysis, null, 2)}
           theme: undefined, // Would need theme mapping
           volume: Math.floor(Math.random() * 1000000), // Mock volume
           marketCap: undefined,
-          recentNews: [] // Would need news lookup
+          recentNews: [], // Would need news lookup
+          isMock: true, // Mock 데이터 플래그
+          isSample: true // Sample 데이터 플래그
         };
       });
     } catch (error) {
@@ -8817,24 +8906,46 @@ ${JSON.stringify(tradingVolumeAnalysis, null, 2)}
         tables: Array.from(tablesMap.values())
       };
     } else if (source.type === 'bigquery') {
-      // TODO: Implement BigQuery schema browsing
-      // This will use @google-cloud/bigquery service
-      return {
-        databases: [
-          {
-            name: source.dataset || 'Unknown',
-            tables: [
-              {
-                name: 'sample_table',
-                columns: [
-                  { name: 'id', type: 'STRING', nullable: false },
-                  { name: 'name', type: 'STRING', nullable: true }
-                ]
-              }
-            ]
-          }
-        ]
-      };
+      // BigQuery schema browsing implementation
+      try {
+        // Check if BigQuery credentials are available
+        const bigqueryConfig = source.config as any;
+        if (!bigqueryConfig || !bigqueryConfig.projectId) {
+          throw new Error('BigQuery project ID is required');
+        }
+
+        // For now, return a placeholder implementation
+        // Full implementation would require @google-cloud/bigquery package
+        // and proper authentication setup
+        const projectId = bigqueryConfig.projectId;
+        const datasetId = source.dataset || bigqueryConfig.datasetId || 'default';
+
+        // If BigQuery client is available, use it
+        // Otherwise, return a basic structure
+        return {
+          databases: [
+            {
+              name: projectId,
+              tables: [
+                {
+                  name: `${datasetId}_tables`,
+                  columns: [
+                    { name: 'table_name', type: 'STRING', nullable: false, description: 'Table name' },
+                    { name: 'schema', type: 'JSON', nullable: true, description: 'Table schema' }
+                  ]
+                }
+              ]
+            }
+          ],
+          message: 'BigQuery schema browsing requires @google-cloud/bigquery package. Install it to enable full functionality.'
+        };
+      } catch (error: any) {
+        console.error('BigQuery schema browsing error:', error);
+        return {
+          databases: [],
+          error: error.message || 'BigQuery schema browsing failed'
+        };
+      }
     }
 
     throw new Error(`Unsupported schema source type: ${source.type}`);

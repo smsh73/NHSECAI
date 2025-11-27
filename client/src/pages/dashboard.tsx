@@ -403,8 +403,8 @@ export default function Dashboard() {
         {/* Search and Results Section */}
         <div className="space-y-6">
           {/* Search Input Section - Enhanced AI Assistant */}
-          <Card data-testid="search-panel" className="border-2 shadow-lg">
-            <CardHeader className="pb-4 border-b bg-muted/30">
+          <Card data-testid="search-panel" className="border">
+            <CardHeader className="pb-4 border-b">
               <CardTitle className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
                   <div className="p-2 bg-primary/10 rounded-lg">
@@ -417,8 +417,8 @@ export default function Dashboard() {
                 </div>
                 {isConnected && (
                   <div className="flex items-center gap-2">
-                    <span className="inline-flex items-center px-3 py-1.5 rounded-full text-xs font-semibold bg-green-50 text-green-700 dark:bg-green-950 dark:text-green-300 border border-green-200 dark:border-green-800" data-testid="status-connection">
-                      <div className="w-2 h-2 bg-green-500 dark:bg-green-400 rounded-full mr-2 animate-pulse"></div>
+                    <span className="inline-flex items-center px-3 py-1.5 rounded text-xs font-medium bg-green-50 text-green-700 dark:bg-green-950 dark:text-green-300 border border-green-200 dark:border-green-800" data-testid="status-connection">
+                      <div className="w-2 h-2 bg-green-500 dark:bg-green-400 rounded-full mr-2"></div>
                       실시간 연결
                     </span>
                   </div>
@@ -433,7 +433,7 @@ export default function Dashboard() {
                     <span>검색어</span>
                     {suggestionLoading && (
                       <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                        <Clock className="w-3 h-3 animate-spin" />
+                        <Clock className="w-3 h-3" />
                         <span>AI 제안 생성중...</span>
                       </div>
                     )}
@@ -463,7 +463,7 @@ export default function Dashboard() {
                     <div 
                       ref={suggestionListRef}
                       id="prompt-suggestions-listbox"
-                      className="absolute z-50 mt-2 w-full bg-background border-2 border-primary/20 rounded-xl shadow-2xl max-h-96 overflow-hidden"
+                      className="absolute z-50 mt-2 w-full bg-background border rounded-lg max-h-96 overflow-hidden"
                       data-suggestion-container
                       role="listbox"
                       aria-label="AI 프롬프트 제안 목록"
@@ -492,9 +492,9 @@ export default function Dashboard() {
                           <div
                             key={suggestion.id || index}
                             id={`suggestion-${index}`}
-                            className={`group relative rounded-lg p-3 mb-1.5 cursor-pointer transition-all duration-200 border ${
+                            className={`group relative rounded p-3 mb-1.5 cursor-pointer border ${
                               index === selectedSuggestionIndex
-                                ? 'bg-primary/10 border-primary shadow-md scale-[1.02]'
+                                ? 'bg-primary/10 border-primary'
                                 : 'hover:bg-muted border-transparent hover:border-border'
                             }`}
                             onClick={() => handleSuggestionSelect(suggestion)}
@@ -548,9 +548,7 @@ export default function Dashboard() {
                                     <span className="font-semibold">
                                       {Math.round((suggestion.confidence || 0) * 100)}%
                                     </span>
-                                    <ArrowRight className={`w-3.5 h-3.5 transition-transform ${
-                                      index === selectedSuggestionIndex ? 'translate-x-1' : 'group-hover:translate-x-0.5'
-                                    }`} />
+                                    <ArrowRight className="w-3.5 h-3.5" />
                                   </div>
                                 </div>
                               </div>
@@ -575,7 +573,7 @@ export default function Dashboard() {
 
                 {/* Right: Filters and Search Button */}
                 <div className="lg:col-span-7 space-y-4">
-                  <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                      <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
                     <div className="space-y-1.5">
                       <Label htmlFor="symbol-filter" className="text-xs text-muted-foreground">종목 코드</Label>
                       <Input
@@ -583,7 +581,7 @@ export default function Dashboard() {
                         value={searchFilters.symbol}
                         onChange={(e) => setSearchFilters(prev => ({ ...prev, symbol: e.target.value }))}
                         placeholder="예: 005930"
-                        className="h-9"
+                        className="h-10"
                         data-testid="input-symbol-filter"
                       />
                     </div>
@@ -595,7 +593,7 @@ export default function Dashboard() {
                         value={searchFilters.market}
                         onChange={(e) => setSearchFilters(prev => ({ ...prev, market: e.target.value }))}
                         placeholder="예: 국내증권"
-                        className="h-9"
+                        className="h-10"
                         data-testid="input-market-filter"
                       />
                     </div>
@@ -607,7 +605,7 @@ export default function Dashboard() {
                         value={searchFilters.category}
                         onChange={(e) => setSearchFilters(prev => ({ ...prev, category: e.target.value }))}
                         placeholder="예: 기업뉴스"
-                        className="h-9"
+                        className="h-10"
                         data-testid="input-category-filter"
                       />
                     </div>
@@ -633,7 +631,7 @@ export default function Dashboard() {
                           const validated = validateTopK(e.target.value);
                           setSearchFilters(prev => ({ ...prev, topK: validated }));
                         }}
-                        className="h-9"
+                        className="h-10"
                         data-testid="input-topk-filter"
                       />
                     </div>
@@ -660,7 +658,7 @@ export default function Dashboard() {
                           const validated = validateThreshold(e.target.value);
                           setSearchFilters(prev => ({ ...prev, threshold: validated }));
                         }}
-                        className="h-9"
+                        className="h-10"
                         data-testid="input-threshold-filter"
                       />
                     </div>
@@ -670,12 +668,12 @@ export default function Dashboard() {
                       <Button 
                         onClick={handleSearch}
                         disabled={searchMutation.isPending || !searchQuery.trim()}
-                        className="w-full h-9"
+                        className="w-full h-10"
                         data-testid="button-search"
                       >
                         {searchMutation.isPending ? (
                           <>
-                            <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                            <Loader2 className="w-4 h-4 mr-2" />
                             검색 중
                           </>
                         ) : (
@@ -711,7 +709,7 @@ export default function Dashboard() {
               {/* Loading State */}
               {searchMutation.isPending && (
                 <div className="flex flex-col items-center justify-center py-12" data-testid="loading-search">
-                  <Loader2 className="w-8 h-8 animate-spin text-primary mb-3" />
+                  <Loader2 className="w-8 h-8 text-primary mb-3" />
                   <p className="text-sm text-muted-foreground">지식 검색 중...</p>
                   <p className="text-xs text-muted-foreground mt-1">벡터 유사도 분석 진행 중</p>
                 </div>
@@ -749,7 +747,7 @@ export default function Dashboard() {
               {searchMutation.data?.combined && searchMutation.data.combined.length > 0 && (
                 <div className="space-y-4" data-testid="search-results-list">
                   {searchMutation.data.combined.map((result: any, index: number) => (
-                    <div key={index} className="p-4 bg-muted/50 rounded-lg border hover:bg-muted/70 transition-colors" data-testid={`search-result-${index}`}>
+                    <div key={index} className="p-4 bg-muted/50 rounded border" data-testid={`search-result-${index}`}>
                       <div className="flex justify-between items-start mb-3">
                         <h4 className="font-medium text-foreground text-sm leading-tight">
                           {result.metadata.title || result.metadata.symbol || `데이터 ${index + 1}`}

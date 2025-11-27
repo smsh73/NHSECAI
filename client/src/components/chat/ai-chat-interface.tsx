@@ -233,18 +233,18 @@ export function AIChatInterface({ className }: AIChatInterfaceProps) {
 
   return (
     <div className={cn("w-full", className)}>
-      <div className="bg-gradient-to-b from-background via-background to-muted/20 border-t">
+      <div className="bg-background border-t">
         <div className="container mx-auto px-6 py-8">
           
           {/* Header Section */}
           <div className="text-center mb-8">
-            <div className="inline-flex items-center justify-center p-3 rounded-2xl bg-gradient-to-br from-primary/20 to-primary/10 mb-4">
-              <Sparkles className="w-8 h-8 text-primary" />
+            <div className="inline-flex items-center justify-center p-3 rounded bg-primary/10 mb-4">
+              <Sparkles className="w-6 h-6 text-primary" />
             </div>
-            <h2 className="text-3xl font-bold mb-3 text-foreground">
+            <h2 className="text-2xl font-semibold mb-3 text-foreground">
               AI 어시스턴트에게 물어보세요
             </h2>
-            <p className="text-muted-foreground max-w-2xl mx-auto">
+            <p className="text-muted-foreground max-w-2xl mx-auto text-sm">
               아래 예시를 클릭하거나 직접 질문을 입력하세요
             </p>
           </div>
@@ -256,7 +256,7 @@ export function AIChatInterface({ className }: AIChatInterfaceProps) {
                 <button
                   key={prompt.id}
                   onClick={() => handlePromptClick(prompt)}
-                  className="px-4 py-2 rounded-lg border border-border/50 bg-card hover:bg-muted/50 hover:border-primary/50 transition-colors text-sm text-foreground"
+                  className="px-4 py-2 rounded border bg-card hover:bg-muted text-sm text-foreground h-9"
                   data-testid={`button-prompt-${prompt.id}`}
                 >
                   {prompt.prompt}
@@ -266,22 +266,19 @@ export function AIChatInterface({ className }: AIChatInterfaceProps) {
           </div>
 
           {/* Chat Interface */}
-          <Card className="border-2 shadow-2xl bg-gradient-to-br from-card to-card/50 backdrop-blur-sm">
+          <Card className="border">
             <CardHeader 
-              className="pb-4 cursor-pointer hover:bg-muted/30 transition-colors rounded-t-lg"
+              className="pb-4 cursor-pointer border-b"
               onClick={() => setIsExpanded(!isExpanded)}
               data-testid="button-chat-toggle"
             >
               <CardTitle className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
-                  <div className="relative">
-                    <div className="absolute inset-0 bg-primary/20 rounded-xl blur-lg animate-pulse" />
-                    <div className="relative p-2 rounded-xl bg-gradient-to-br from-primary to-primary/80">
-                      <Bot className="w-5 h-5 text-primary-foreground" />
-                    </div>
+                  <div className="p-2 rounded bg-primary/10">
+                    <Bot className="w-5 h-5 text-primary" />
                   </div>
-                  <span className="text-lg font-bold">AI 어시스턴트</span>
-                  <Badge variant="secondary" className="font-semibold px-3 shadow-sm">
+                  <span className="text-base font-semibold">AI 어시스턴트</span>
+                  <Badge variant="secondary" className="font-medium px-2 h-6">
                     {modelName}
                   </Badge>
                 </div>
@@ -305,7 +302,7 @@ export function AIChatInterface({ className }: AIChatInterfaceProps) {
               <CardContent className="pt-0 pb-6">
                 {/* Messages Area */}
                 <ScrollArea 
-                  className="h-96 mb-6 border-2 rounded-xl p-4 bg-muted/20"
+                  className="h-96 mb-6 border rounded p-4 bg-muted/10"
                   ref={scrollAreaRef}
                   style={{ userSelect: 'text', WebkitUserSelect: 'text', MozUserSelect: 'text', msUserSelect: 'text', cursor: 'text' }}
                   onSelect={(e) => e.stopPropagation()}
@@ -319,10 +316,10 @@ export function AIChatInterface({ className }: AIChatInterfaceProps) {
                 >
                   {messages.length === 0 ? (
                     <div className="flex flex-col items-center justify-center h-full text-center py-12">
-                      <div className="p-4 rounded-2xl bg-gradient-to-br from-primary/10 to-primary/5 mb-4">
-                        <Bot className="w-12 h-12 text-primary" />
+                      <div className="p-4 rounded bg-primary/10 mb-4">
+                        <Bot className="w-8 h-8 text-primary" />
                       </div>
-                      <h3 className="text-lg font-semibold mb-2">대화를 시작해보세요!</h3>
+                      <h3 className="text-base font-semibold mb-2">대화를 시작해보세요</h3>
                       <p className="text-sm text-muted-foreground max-w-sm">
                         궁금한 것을 물어보시면 AI가 도와드리겠습니다
                       </p>
@@ -339,19 +336,16 @@ export function AIChatInterface({ className }: AIChatInterfaceProps) {
                           data-testid={`message-${message.role}-${message.id}`}
                         >
                           {message.role === 'assistant' && (
-                            <div className="relative flex-shrink-0">
-                              <div className="absolute inset-0 bg-primary/20 rounded-xl blur-md" />
-                              <div className="relative w-8 h-8 rounded-xl bg-gradient-to-br from-primary to-primary/80 flex items-center justify-center">
-                                <Bot className="w-4 h-4 text-primary-foreground" />
-                              </div>
+                            <div className="w-8 h-8 rounded bg-primary/10 flex items-center justify-center flex-shrink-0">
+                              <Bot className="w-4 h-4 text-primary" />
                             </div>
                           )}
                           <div
                             className={cn(
-                              "max-w-[75%] rounded-2xl px-4 py-3 shadow-md",
+                              "max-w-[75%] rounded px-4 py-3",
                               message.role === 'user'
-                                ? "bg-gradient-to-br from-primary to-primary/90 text-primary-foreground"
-                                : "bg-white dark:bg-gray-800 border-2 border-border/50 text-gray-900 dark:text-gray-100"
+                                ? "bg-primary text-primary-foreground"
+                                : "bg-background border text-foreground"
                             )}
                           >
                             <p 
@@ -421,7 +415,7 @@ export function AIChatInterface({ className }: AIChatInterfaceProps) {
                             </div>
                           </div>
                           {message.role === 'user' && (
-                            <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-secondary to-secondary/80 flex items-center justify-center flex-shrink-0 shadow-md">
+                            <div className="w-8 h-8 rounded bg-muted flex items-center justify-center flex-shrink-0">
                               <User className="w-4 h-4" />
                             </div>
                           )}
@@ -431,17 +425,14 @@ export function AIChatInterface({ className }: AIChatInterfaceProps) {
                       {/* Loading indicator */}
                       {sendMessageMutation.isPending && (
                         <div className="flex gap-3 items-start justify-start">
-                          <div className="relative flex-shrink-0">
-                            <div className="absolute inset-0 bg-primary/20 rounded-xl blur-md animate-pulse" />
-                            <div className="relative w-8 h-8 rounded-xl bg-gradient-to-br from-primary to-primary/80 flex items-center justify-center">
-                              <Bot className="w-4 h-4 text-primary-foreground" />
-                            </div>
+                          <div className="w-8 h-8 rounded bg-primary/10 flex items-center justify-center flex-shrink-0">
+                            <Bot className="w-4 h-4 text-primary" />
                           </div>
-                          <div className="bg-white dark:bg-gray-800 border-2 border-border/50 rounded-2xl px-4 py-3 shadow-md">
+                          <div className="bg-background border rounded px-4 py-3">
                             <div className="flex gap-1.5">
-                              <div className="w-2.5 h-2.5 bg-primary/60 rounded-full animate-bounce" />
-                              <div className="w-2.5 h-2.5 bg-primary/60 rounded-full animate-bounce" style={{ animationDelay: '0.1s' }} />
-                              <div className="w-2.5 h-2.5 bg-primary/60 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }} />
+                              <div className="w-2 h-2 bg-primary/60 rounded-full" />
+                              <div className="w-2 h-2 bg-primary/60 rounded-full" />
+                              <div className="w-2 h-2 bg-primary/60 rounded-full" />
                             </div>
                           </div>
                         </div>
@@ -462,7 +453,7 @@ export function AIChatInterface({ className }: AIChatInterfaceProps) {
                         onKeyDown={handleKeyDown}
                         placeholder="메시지를 입력하세요... (Ctrl+Space로 제안 보기)"
                         disabled={sendMessageMutation.isPending}
-                        className="h-12 pr-32 text-base border-2 focus:ring-2 focus:ring-primary/20"
+                        className="h-10 pr-32 text-sm border focus:ring-2 focus:ring-primary/20"
                         data-testid="input-chat-message"
                       />
                       
@@ -533,12 +524,11 @@ export function AIChatInterface({ className }: AIChatInterfaceProps) {
                   <Button
                     onClick={handleSendMessage}
                     disabled={!inputMessage.trim() || sendMessageMutation.isPending}
-                    size="lg"
-                    className="h-12 px-6 gap-2 shadow-lg hover:shadow-xl transition-all"
+                    className="h-10 px-6"
                     data-testid="button-send-message"
                   >
-                    <Send className="w-5 h-5" />
-                    <span className="font-semibold">전송</span>
+                    <Send className="w-4 h-4 mr-2" />
+                    전송
                   </Button>
                 </div>
               </CardContent>

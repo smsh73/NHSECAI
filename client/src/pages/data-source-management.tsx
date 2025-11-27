@@ -847,7 +847,23 @@ export default function DataSourceManagement() {
               />
             </div>
             <div>
-              <Label htmlFor="sqlQuery">SQL 쿼리 *</Label>
+              <div className="flex items-center justify-between mb-2">
+                <Label htmlFor="sqlQuery">SQL 쿼리 *</Label>
+                {sqlQueryFormData.dataSourceId && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      setSchemaDataSourceId(sqlQueryFormData.dataSourceId);
+                      setSchemaDialogOpen(true);
+                    }}
+                  >
+                    <Table className="mr-2 h-4 w-4" />
+                    스키마 조회
+                  </Button>
+                )}
+              </div>
               <Textarea
                 id="sqlQuery"
                 value={sqlQueryFormData.query}
@@ -915,7 +931,27 @@ export default function DataSourceManagement() {
               {schemaDataSourceId && dataSources?.find(ds => ds.id === schemaDataSourceId)?.displayName || '데이터소스'}의 테이블 스키마 정보
             </DialogDescription>
           </DialogHeader>
-          <SchemaViewer dataSourceId={schemaDataSourceId} />
+          <SchemaViewer 
+            dataSourceId={schemaDataSourceId}
+            onTableSelect={(tableName) => {
+              // SQL 쿼리에 테이블명 추가
+              if (isSqlQueryDialogOpen && sqlQueryFormData.query) {
+                setSqlQueryFormData({
+                  ...sqlQueryFormData,
+                  query: sqlQueryFormData.query + (sqlQueryFormData.query.trim().endsWith(';') ? '\n' : ' ') + tableName
+                });
+              }
+            }}
+            onColumnSelect={(columnName) => {
+              // SQL 쿼리에 컬럼명 추가
+              if (isSqlQueryDialogOpen && sqlQueryFormData.query) {
+                setSqlQueryFormData({
+                  ...sqlQueryFormData,
+                  query: sqlQueryFormData.query + (sqlQueryFormData.query.trim().endsWith(';') ? '\n' : ', ') + columnName
+                });
+              }
+            }}
+          />
         </DialogContent>
       </Dialog>
     </div>
@@ -923,7 +959,15 @@ export default function DataSourceManagement() {
 }
 
 // Schema Viewer Component
-function SchemaViewer({ dataSourceId }: { dataSourceId: string | null }) {
+function SchemaViewer({ 
+  dataSourceId, 
+  onTableSelect, 
+  onColumnSelect 
+}: { 
+  dataSourceId: string | null;
+  onTableSelect?: (tableName: string) => void;
+  onColumnSelect?: (columnName: string) => void;
+}) {
   const { toast } = useToast();
   
   const { data: schemaData, isLoading, error } = useQuery({
@@ -1022,15 +1066,44 @@ function SchemaViewer({ dataSourceId }: { dataSourceId: string | null }) {
                 <div className="space-y-2">
                   {database.tables.map((table: any, tableIdx: number) => (
                     <div key={tableIdx} className="border rounded-lg p-3">
-                      <div className="font-medium mb-2">{table.name}</div>
+                      <div 
+                        className="font-medium mb-2 cursor-pointer hover:text-primary"
+                        onClick={() => {
+                          const fullTableName = `${database.name}.${table.name}`;
+                          onTableSelect?.(fullTableName);
+                          navigator.clipboard.writeText(fullTableName);
+                          toast({
+                            title: "테이블 추가됨",
+                            description: `${fullTableName}이(가) 클립보드에 복사되었습니다.`,
+                          });
+                        }}
+                        title="클릭하여 테이블명 복사"
+                      >
+                        {table.name}
+                      </div>
                       {table.columns && table.columns.length > 0 && (
                         <div className="text-sm space-y-1">
                           <div className="font-semibold mb-1">컬럼:</div>
-                          {table.columns.map((col: any, colIdx: number) => (
-                            <div key={colIdx} className="pl-2 text-muted-foreground">
-                              {col.name} ({col.type}) {col.is_nullable === 'NO' ? 'NOT NULL' : 'NULL'}
-                            </div>
-                          ))}
+                          <div className="flex flex-wrap gap-1">
+                            {table.columns.map((col: any, colIdx: number) => (
+                              <Badge
+                                key={colIdx}
+                                variant="outline"
+                                className="text-xs cursor-pointer hover:bg-primary hover:text-primary-foreground"
+                                onClick={() => {
+                                  onColumnSelect?.(col.name);
+                                  navigator.clipboard.writeText(col.name);
+                                  toast({
+                                    title: "컬럼 추가됨",
+                                    description: `${col.name}이(가) 클립보드에 복사되었습니다.`,
+                                  });
+                                }}
+                                title="클릭하여 컬럼명 복사"
+                              >
+                                {col.name} ({col.type})
+                              </Badge>
+                            ))}
+                          </div>
                         </div>
                       )}
                     </div>

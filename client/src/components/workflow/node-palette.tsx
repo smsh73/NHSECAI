@@ -1,7 +1,7 @@
 import { Input } from "@/components/ui/input";
 import { DraggableNodeData } from "@/types/workflow";
 import { useQuery } from "@tanstack/react-query";
-import type { Prompt, ApiCall, Workflow, PythonScript, DataSource, SqlQuery } from "@shared/schema";
+import type { Prompt, ApiCall, Workflow, PythonScript, DataSource, SqlQuery, RagEmbeddingSchema } from "@shared/schema";
 import { useMemo, useState } from "react";
 import { Bot, Share, GitBranch, Merge, Newspaper, BarChart3, Calculator, TrendingUp, MessageSquare, Loader2, Sparkles, Tags, Bell, Database, RefreshCw, Play, Code2, FileCode, Server, StopCircle, Search, ChevronDown, ChevronRight } from "lucide-react";
 
@@ -105,6 +105,20 @@ export function NodePalette({ onNodeSelect, onNodeDoubleClick }: NodePaletteProp
       const response = await apiRequest('GET', '/api/sql-queries?isActive=true');
       if (!response.ok) {
         throw new Error('Failed to fetch SQL queries');
+      }
+      return await response.json();
+    },
+    staleTime: 30 * 1000,
+  });
+
+  // RAG Embedding Schemas for RAG nodes
+  const { data: ragSchemas, isLoading: ragSchemasLoading } = useQuery<RagEmbeddingSchema[]>({
+    queryKey: ['/api/rag/embedding/schemas'],
+    queryFn: async () => {
+      const { apiRequest } = await import('@/lib/queryClient');
+      const response = await apiRequest('GET', '/api/rag/embedding/schemas');
+      if (!response.ok) {
+        throw new Error('Failed to fetch RAG schemas');
       }
       return await response.json();
     },
@@ -327,15 +341,41 @@ export function NodePalette({ onNodeSelect, onNodeDoubleClick }: NodePaletteProp
       }
     }
 
+    // RAG Schemas category
+    if (ragSchemas) {
+      const ragNodes: EnhancedDraggableNodeData[] = ragSchemas
+        .filter((schema: RagEmbeddingSchema) => schema.isActive)
+        .map((schema: RagEmbeddingSchema) => ({
+          type: "rag" as const,
+          label: schema.name,
+          description: schema.description || `RAG 검색 실행 (${schema.searchIndexName})`,
+          icon: "search",
+          color: "text-violet-500",
+          category: "rag",
+          id: schema.id,
+          ragSchemaId: schema.id,
+          searchIndexName: schema.searchIndexName,
+          vectorFieldName: schema.vectorFieldName || "content_vector",
+          contentFieldName: schema.contentFieldName || "content",
+        } as EnhancedDraggableNodeData));
+
+      if (ragNodes.length > 0) {
+        categories.push({
+          category: "RAG 검색",
+          nodes: ragNodes,
+        });
+      }
+    }
+
     return categories;
-  }, [prompts, apiCalls, workflows, pythonScripts, sqlQueries, dataSources]);
+  }, [prompts, apiCalls, workflows, pythonScripts, sqlQueries, dataSources, ragSchemas]);
 
   const handleDragStart = (e: React.DragEvent, nodeData: EnhancedDraggableNodeData) => {
     e.dataTransfer.setData('application/json', JSON.stringify(nodeData));
     e.dataTransfer.effectAllowed = 'copy';
   };
 
-  const isLoading = promptsLoading || apiCallsLoading || workflowsLoading || pythonScriptsLoading || dataSourcesLoading || sqlQueriesLoading;
+  const isLoading = promptsLoading || apiCallsLoading || workflowsLoading || pythonScriptsLoading || dataSourcesLoading || sqlQueriesLoading || ragSchemasLoading;
 
   // Filter categories and nodes based on search query
   const filteredCategories = useMemo(() => {

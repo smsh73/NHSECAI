@@ -148,6 +148,22 @@ export const ROLE_BASED_MENU_CONFIG: MenuCategory[] = [
         requiredRoles: ['analyst', 'ops', 'admin'],
         requiredLevel: 2
       },
+      { 
+        path: "/data-query-ai-market", 
+        label: "AI 시황 결과 데이터 쿼리", 
+        icon: BarChart3, 
+        color: "text-blue-500",
+        requiredRoles: ['analyst', 'ops', 'admin'],
+        requiredLevel: 2
+      },
+      { 
+        path: "/data-query-holdings", 
+        label: "잔고 분석 결과 데이터 쿼리", 
+        icon: Wallet, 
+        color: "text-green-500",
+        requiredRoles: ['analyst', 'ops', 'admin'],
+        requiredLevel: 2
+      },
     ]
   },
   {

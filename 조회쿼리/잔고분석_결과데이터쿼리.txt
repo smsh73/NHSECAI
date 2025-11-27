@@ -1,0 +1,126 @@
+-- 잔고 분석 결과 데이터 조회 쿼리
+-- Databricks Gold 스키마에서 잔고 분석 결과를 조회합니다.
+
+-- 기본 쿼리: 최근 잔고 분석 결과 조회
+SELECT 
+    analysis_id,
+    user_id,
+    analysis_date,
+    analysis_time,
+    total_value,
+    total_profit_loss,
+    total_profit_loss_rate,
+    holdings_count,
+    top_holdings,
+    sector_distribution,
+    risk_score,
+    recommendations,
+    ingest_ts
+FROM nh_ai.gold.holdings_analysis
+WHERE analysis_date >= current_date() - INTERVAL 30 DAYS
+ORDER BY analysis_date DESC, analysis_time DESC
+LIMIT 100;
+
+-- 조건부 쿼리 예시:
+-- 1. 특정 사용자 잔고 분석 조회
+-- WHERE user_id = 'user123'
+
+-- 2. 특정 날짜 범위 조회
+-- WHERE analysis_date BETWEEN '2025-01-01' AND '2025-01-31'
+
+-- 3. 수익률 기반 필터링
+-- WHERE total_profit_loss_rate >= 5.0  -- 5% 이상 수익
+
+-- 4. 손실 포지션만 조회
+-- WHERE total_profit_loss < 0
+
+-- 5. 리스크 점수 기반 필터링
+-- WHERE risk_score >= 70  -- 높은 리스크
+
+-- 6. 보유 종목 수 기반 필터링
+-- WHERE holdings_count BETWEEN 5 AND 20
+
+-- 7. 섹터별 분포 조회
+SELECT 
+    analysis_id,
+    user_id,
+    analysis_date,
+    sector_distribution,
+    JSON_EXTRACT_PATH_TEXT(sector_distribution, 'technology') as tech_percentage,
+    JSON_EXTRACT_PATH_TEXT(sector_distribution, 'finance') as finance_percentage,
+    JSON_EXTRACT_PATH_TEXT(sector_distribution, 'healthcare') as healthcare_percentage
+FROM nh_ai.gold.holdings_analysis
+WHERE analysis_date >= current_date() - INTERVAL 30 DAYS
+ORDER BY analysis_date DESC
+LIMIT 100;
+
+-- 8. 상위 보유 종목 상세 조회
+SELECT 
+    analysis_id,
+    user_id,
+    analysis_date,
+    top_holdings,
+    JSON_ARRAY_LENGTH(top_holdings) as holdings_count
+FROM nh_ai.gold.holdings_analysis
+WHERE analysis_date >= current_date() - INTERVAL 30 DAYS
+  AND JSON_ARRAY_LENGTH(top_holdings) > 0
+ORDER BY analysis_date DESC
+LIMIT 100;
+
+-- 9. 추천 사항 포함 조회
+SELECT 
+    analysis_id,
+    user_id,
+    analysis_date,
+    recommendations,
+    JSON_ARRAY_LENGTH(recommendations) as recommendation_count
+FROM nh_ai.gold.holdings_analysis
+WHERE analysis_date >= current_date() - INTERVAL 30 DAYS
+  AND recommendations IS NOT NULL
+  AND JSON_ARRAY_LENGTH(recommendations) > 0
+ORDER BY analysis_date DESC
+LIMIT 100;
+
+-- 10. 통계 집계 쿼리
+SELECT 
+    analysis_date,
+    COUNT(*) as analysis_count,
+    AVG(total_value) as avg_total_value,
+    AVG(total_profit_loss_rate) as avg_profit_loss_rate,
+    AVG(risk_score) as avg_risk_score,
+    AVG(holdings_count) as avg_holdings_count
+FROM nh_ai.gold.holdings_analysis
+WHERE analysis_date >= current_date() - INTERVAL 30 DAYS
+GROUP BY analysis_date
+ORDER BY analysis_date DESC;
+
+-- 11. 사용자별 최신 분석 조회
+SELECT DISTINCT ON (user_id)
+    analysis_id,
+    user_id,
+    analysis_date,
+    analysis_time,
+    total_value,
+    total_profit_loss,
+    total_profit_loss_rate,
+    risk_score
+FROM nh_ai.gold.holdings_analysis
+WHERE analysis_date >= current_date() - INTERVAL 30 DAYS
+ORDER BY user_id, analysis_date DESC, analysis_time DESC;
+
+-- 12. 종목별 상세 분석 (top_holdings 배열 확장)
+SELECT 
+    analysis_id,
+    user_id,
+    analysis_date,
+    JSON_EXTRACT_PATH_TEXT(holding, 'symbol') as symbol,
+    JSON_EXTRACT_PATH_TEXT(holding, 'quantity') as quantity,
+    JSON_EXTRACT_PATH_TEXT(holding, 'value') as value,
+    JSON_EXTRACT_PATH_TEXT(holding, 'profit_loss') as profit_loss,
+    JSON_EXTRACT_PATH_TEXT(holding, 'profit_loss_rate') as profit_loss_rate
+FROM nh_ai.gold.holdings_analysis,
+LATERAL FLATTEN(input => top_holdings) as holding
+WHERE analysis_date >= current_date() - INTERVAL 30 DAYS
+ORDER BY analysis_date DESC, value DESC
+LIMIT 500;
+

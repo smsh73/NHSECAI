@@ -1,0 +1,109 @@
+-- AI 시황 결과 데이터 조회 쿼리
+-- Databricks Gold 스키마에서 AI 시황 생성 결과를 조회합니다.
+
+-- 기본 쿼리: 최근 생성된 AI 시황 결과 조회
+SELECT 
+    trend_id,
+    base_date,
+    base_time,
+    title,
+    content,
+    ingest_ts
+FROM nh_ai.gold.macro_market_analysis
+WHERE base_date >= current_date() - INTERVAL 7 DAYS
+ORDER BY base_date DESC, base_time DESC
+LIMIT 100;
+
+-- 조건부 쿼리 예시:
+-- 1. 특정 날짜 범위 조회
+-- WHERE base_date BETWEEN '2025-01-01' AND '2025-01-31'
+
+-- 2. 특정 시간대 조회
+-- WHERE base_time BETWEEN '090000' AND '180000'
+
+-- 3. 최근 N일간 조회
+-- WHERE base_date >= current_date() - INTERVAL 30 DAYS
+
+-- 4. 특정 키워드 포함 조회
+-- WHERE content LIKE '%금리%' OR title LIKE '%금리%'
+
+-- 5. 품질 점수 기반 필터링 (점수 컬럼이 있는 경우)
+-- WHERE quality_score >= 80
+
+-- 6. 이벤트 기반 조회
+SELECT 
+    e.event_id,
+    e.base_date,
+    e.base_time,
+    e.event_title,
+    e.event_detail,
+    e.news_ids,
+    e.news_titles,
+    e.display_cnt
+FROM nh_ai.gold.market_events e
+WHERE e.base_date >= current_date() - INTERVAL 7 DAYS
+ORDER BY e.base_date DESC, e.base_time DESC
+LIMIT 100;
+
+-- 7. 테마 시황 조회
+SELECT 
+    t.trend_id,
+    t.base_date,
+    t.base_time,
+    t.theme_title,
+    t.code,
+    t.content,
+    t.bubble_scale,
+    t.direction,
+    t.fluctuation_rate,
+    t.transaction_amt
+FROM nh_ai.gold.theme_market_analysis t
+WHERE t.base_date >= current_date() - INTERVAL 7 DAYS
+ORDER BY t.base_date DESC, t.base_time DESC
+LIMIT 100;
+
+-- 8. 통합 조회 (매크로 + 이벤트 + 테마)
+WITH macro_data AS (
+    SELECT 
+        'macro' as type,
+        trend_id as id,
+        base_date,
+        base_time,
+        title as display_title,
+        content,
+        ingest_ts
+    FROM nh_ai.gold.macro_market_analysis
+    WHERE base_date >= current_date() - INTERVAL 7 DAYS
+),
+event_data AS (
+    SELECT 
+        'event' as type,
+        event_id as id,
+        base_date,
+        base_time,
+        event_title as display_title,
+        event_detail as content,
+        ingest_ts
+    FROM nh_ai.gold.market_events
+    WHERE base_date >= current_date() - INTERVAL 7 DAYS
+),
+theme_data AS (
+    SELECT 
+        'theme' as type,
+        trend_id as id,
+        base_date,
+        base_time,
+        theme_title as display_title,
+        content,
+        ingest_ts
+    FROM nh_ai.gold.theme_market_analysis
+    WHERE base_date >= current_date() - INTERVAL 7 DAYS
+)
+SELECT * FROM macro_data
+UNION ALL
+SELECT * FROM event_data
+UNION ALL
+SELECT * FROM theme_data
+ORDER BY base_date DESC, base_time DESC
+LIMIT 200;
+

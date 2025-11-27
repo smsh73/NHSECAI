@@ -156,15 +156,26 @@ router.post('/session', async (req: Request, res: Response) => {
     session.messages.push(userMessage);
     session.updatedAt = new Date();
     
-    // TODO: Save user message to database if userId provided
-    // if (session.userId) {
-    //   await storage.createChatMessage({
-    //     sessionId: session.id,
-    //     role: 'user',
-    //     content: message,
-    //     timestamp: new Date()
-    //   });
-    // }
+    // Save user message to database if userId provided
+    if (session.userId) {
+      try {
+        const { db } = await import('../db.js');
+        const { aiChatMessages } = await import('@shared/schema');
+        const { insertAiChatMessageSchema } = await import('@shared/schema');
+        
+        const messageData = insertAiChatMessageSchema.parse({
+          sessionId: session.id,
+          userId: session.userId,
+          role: 'user',
+          content: message,
+        });
+        
+        await db.insert(aiChatMessages).values(messageData);
+      } catch (error) {
+        console.error('Failed to save user message:', error);
+        // Don't fail the request if message saving fails
+      }
+    }
 
     // Enhanced financial system prompt
     const financialSystemPrompt = `당신은 NHQV 금융 AI 어시스턴트입니다. 다음 지침을 따라주세요:
@@ -338,16 +349,29 @@ router.post('/session', async (req: Request, res: Response) => {
       session.messages.push(assistantMessage);
       session.updatedAt = new Date();
       
-      // TODO: Save assistant message to database if userId provided
-      // if (session.userId) {
-      //   await storage.createChatMessage({
-      //     sessionId: session.id,
-      //     role: 'assistant',
-      //     content: aiResponse.data?.content || '',
-      //     timestamp: new Date(),
-      //     metadata: { tools: toolResults }
-      //   });
-      // }
+      // Save assistant message to database if userId provided
+      if (session.userId) {
+        try {
+          const { db } = await import('../db.js');
+          const { aiChatMessages } = await import('@shared/schema');
+          const { insertAiChatMessageSchema } = await import('@shared/schema');
+          
+          const messageData = insertAiChatMessageSchema.parse({
+            sessionId: session.id,
+            userId: session.userId,
+            role: 'assistant',
+            content: aiResponse.data?.content || '',
+            tools: toolResults ? toolResults.map((tr: any) => ({ name: tr.tool, result: tr.result })) : null,
+            toolResults: toolResults || null,
+            metadata: { tools: toolResults },
+          });
+          
+          await db.insert(aiChatMessages).values(messageData);
+        } catch (error) {
+          console.error('Failed to save assistant message:', error);
+          // Don't fail the request if message saving fails
+        }
+      }
     }
     
     // Broadcast user message via WebSocket

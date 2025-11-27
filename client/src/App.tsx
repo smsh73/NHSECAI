@@ -45,6 +45,8 @@ import AuditLogManagement from "@/pages/audit-log-management";
 import AISearchManagement from "@/pages/ai-search-management";
 import RAGManagement from "@/pages/rag-management";
 import RAGSecurityManagement from "@/pages/rag-security-management";
+import DataQueryAIMarket from "@/pages/data-query-ai-market";
+import DataQueryHoldings from "@/pages/data-query-holdings";
 
 function Router() {
   const { isAuthenticated, isLoading } = useAuth();
@@ -211,6 +213,16 @@ function Router() {
             <Route path="/dictionary-manager">
               <ProtectedRoute path="/dictionary-manager" requiredRoles={['analyst', 'ops', 'admin']}>
                 <DictionaryManager />
+              </ProtectedRoute>
+            </Route>
+            <Route path="/data-query-ai-market">
+              <ProtectedRoute path="/data-query-ai-market" requiredRoles={['analyst', 'ops', 'admin']}>
+                <DataQueryAIMarket />
+              </ProtectedRoute>
+            </Route>
+            <Route path="/data-query-holdings">
+              <ProtectedRoute path="/data-query-holdings" requiredRoles={['analyst', 'ops', 'admin']}>
+                <DataQueryHoldings />
               </ProtectedRoute>
             </Route>
             <Route path="/prompt-builder">

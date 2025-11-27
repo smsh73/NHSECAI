@@ -246,7 +246,9 @@ export class AzureDatabricksService {
         console.log(`🔄 Executing Databricks query: ${sql.substring(0, 100)}...`);
 
         // Set timeout for query execution
-        const timeoutMs = options.timeout || 300000; // 5 minutes default
+        // For sample data queries, use shorter timeout to prevent hanging
+        const isSampleQuery = /LIMIT\s+\d+/i.test(sql) && /SELECT/i.test(sql);
+        const timeoutMs = options.timeout || (isSampleQuery ? 60000 : 300000); // 1 minute for sample, 5 minutes default
         const queryPromise = (async () => {
           const operation = await this.session!.executeStatement(sql, {
             maxRows: options.maxRows || 10000,
@@ -346,16 +348,27 @@ export class AzureDatabricksService {
           continue;
         }
 
-        // Handle QUERY_REQUEST_WRITE_TO_CLOUD_STORE_FAILED error specifically
-        if (errorMessage.includes('QUERY_REQUEST_WRITE_TO_CLOUD_STORE_FAILED') || 
+        // Handle QUERY_RESULT_WRITE_TO_CLOUD_STORE_FAILED error specifically
+        if (errorMessage.includes('QUERY_RESULT_WRITE_TO_CLOUD_STORE_FAILED') || 
+            errorMessage.includes('QUERY_REQUEST_WRITE_TO_CLOUD_STORE_FAILED') || 
             errorMessage.includes('WRITE_TO_CLOUD_STORE_FAILED')) {
           // This error occurs when result set is too large
-          // Suggest using LIMIT clause or reducing result size
-          throw new Error(
-            `쿼리 결과가 너무 커서 클라우드 스토어에 저장할 수 없습니다. ` +
-            `LIMIT 절을 추가하거나 결과 크기를 줄여주세요. ` +
-            `예: SELECT * FROM table LIMIT 1000`
-          );
+          // Check if LIMIT clause exists, if not suggest adding one
+          const hasLimit = /LIMIT\s+\d+/i.test(sql);
+          if (!hasLimit) {
+            throw new Error(
+              `쿼리 결과가 너무 커서 클라우드 스토어에 저장할 수 없습니다. ` +
+              `LIMIT 절을 추가해주세요. ` +
+              `예: SELECT * FROM table LIMIT 1000`
+            );
+          } else {
+            // LIMIT exists but still too large, suggest smaller limit
+            throw new Error(
+              `쿼리 결과가 너무 커서 클라우드 스토어에 저장할 수 없습니다. ` +
+              `LIMIT 값을 더 작게 설정해주세요 (예: LIMIT 100 또는 LIMIT 500). ` +
+              `또는 WHERE 절을 추가하여 결과 범위를 줄여주세요.`
+            );
+          }
         }
 
         // If not retryable or last attempt, throw error

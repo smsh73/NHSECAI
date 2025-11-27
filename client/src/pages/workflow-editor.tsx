@@ -1734,6 +1734,52 @@ export default function WorkflowEditor() {
                 {hasUnsavedChanges ? "변경됨" : "저장됨"}
               </Badge>
             )}
+            
+            {/* Folder Management */}
+            {currentWorkflow && (
+              <div className="flex items-center gap-2">
+                <Select
+                  value={currentWorkflow.folderId || 'none'}
+                  onValueChange={async (folderId) => {
+                    try {
+                      const response = await apiRequest('PUT', `/api/workflows/${currentWorkflow.id}/folder`, {
+                        folderId: folderId === 'none' ? null : folderId
+                      });
+                      if (response.ok) {
+                        const updated = await response.json();
+                        setCurrentWorkflow(updated);
+                        queryClient.invalidateQueries({ queryKey: ['/api/workflows'] });
+                        toast({
+                          title: "폴더 이동 완료",
+                          description: "워크플로우가 폴더로 이동되었습니다.",
+                        });
+                      }
+                    } catch (error: any) {
+                      toast({
+                        title: "이동 실패",
+                        description: error.message || "워크플로우 이동 중 오류가 발생했습니다.",
+                        variant: "destructive",
+                      });
+                    }
+                  }}
+                >
+                  <SelectTrigger className="w-40">
+                    <SelectValue placeholder="폴더 선택" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">폴더 없음</SelectItem>
+                    {workflowFolders?.map((folder: WorkflowFolder) => (
+                      <SelectItem key={folder.id} value={folder.id}>
+                        <div className="flex items-center gap-2">
+                          <Folder className="h-4 w-4" />
+                          {folder.name}
+                        </div>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
           </div>
           
           <div className="flex items-center space-x-2">
@@ -1817,7 +1863,18 @@ export default function WorkflowEditor() {
         />
         
         {/* Properties Panel is now a modal dialog */}
-        <Dialog open={isPanelVisible} onOpenChange={setIsPanelVisible}>
+        <Dialog 
+          open={isPanelVisible} 
+          onOpenChange={(open) => {
+            // Dialog가 닫힐 때 selectedNode를 유지하고 패널만 닫기
+            if (!open) {
+              setIsPanelVisible(false);
+              // selectedNode는 유지하여 워크플로우 캔버스가 사라지지 않도록 함
+            } else {
+              setIsPanelVisible(true);
+            }
+          }}
+        >
           <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
             <PropertiesPanel
               selectedNode={selectedNode ? {
@@ -1832,6 +1889,86 @@ export default function WorkflowEditor() {
               allNodes={nodes.map(node => ({ id: node.id, data: node.data }))}
               allEdges={edges.map(edge => ({ source: edge.source, target: edge.target }))}
               nodeExecutionResults={nodeExecutionResults}
+              onExecuteNode={async (nodeId: string, workflowDefinition: any) => {
+                if (simulationMode && simulationSessionId) {
+                  await executeSingleNodeMutation.mutateAsync({ 
+                    nodeId, 
+                    workflowDefinition: {
+                      nodes: nodes.map(n => ({
+                        id: n.id,
+                        type: n.data.config?.type || 'unknown',
+                        position: n.position,
+                        data: n.data
+                      })),
+                      edges: edges.map(e => ({
+                        id: e.id,
+                        source: e.source,
+                        target: e.target,
+                        sourceHandle: e.sourceHandle || undefined,
+                        targetHandle: e.targetHandle || undefined
+                      }))
+                    }
+                  });
+                } else {
+                  // 시뮬레이션 모드가 아니면 세션 생성 후 실행
+                  if (!simulationSessionId) {
+                    const sessionResponse = await apiRequest('POST', '/api/workflows/simulation/create-session', {
+                      workflowDefinition: {
+                        nodes: nodes.map(n => ({
+                          id: n.id,
+                          type: n.data.config?.type || 'unknown',
+                          position: n.position,
+                          data: n.data
+                        })),
+                        edges: edges.map(e => ({
+                          id: e.id,
+                          source: e.source,
+                          target: e.target
+                        }))
+                      }
+                    });
+                    if (sessionResponse.ok) {
+                      const sessionData = await sessionResponse.json();
+                      setSimulationSessionId(sessionData.sessionId);
+                      await executeSingleNodeMutation.mutateAsync({ 
+                        nodeId, 
+                        workflowDefinition: {
+                          nodes: nodes.map(n => ({
+                            id: n.id,
+                            type: n.data.config?.type || 'unknown',
+                            position: n.position,
+                            data: n.data
+                          })),
+                          edges: edges.map(e => ({
+                            id: e.id,
+                            source: e.source,
+                            target: e.target
+                          }))
+                        }
+                      });
+                    } else {
+                      throw new Error('시뮬레이션 세션 생성에 실패했습니다.');
+                    }
+                  } else {
+                    await executeSingleNodeMutation.mutateAsync({ 
+                      nodeId, 
+                      workflowDefinition: {
+                        nodes: nodes.map(n => ({
+                          id: n.id,
+                          type: n.data.config?.type || 'unknown',
+                          position: n.position,
+                          data: n.data
+                        })),
+                        edges: edges.map(e => ({
+                          id: e.id,
+                          source: e.source,
+                          target: e.target
+                        }))
+                      }
+                    });
+                  }
+                }
+              }}
             />
           </DialogContent>
         </Dialog>

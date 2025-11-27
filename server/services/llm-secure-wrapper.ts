@@ -233,20 +233,31 @@ export class LLMSecureWrapper {
     } catch (error: any) {
       const executionTime = Date.now() - startTime;
       
+      // 에러 메시지 필터링 (중요정보/AI모델 정보 노출 방지)
+      const rawErrorMessage = error.message || "LLM 호출 중 오류 발생";
+      const sanitizedErrorMessage = ragGuardrailsService.sanitizeErrorMessage(rawErrorMessage);
+      
       // 에러 로깅
       await enhancedAuditLogger.log({
         eventType: "LLM_CALL_ERROR",
         eventCategory: "AI_SERVICE",
         severity: "HIGH",
         action: "LLM 호출 실패",
-        actionDescription: error.message || "LLM 호출 중 오류 발생",
+        actionDescription: sanitizedErrorMessage,
         success: false,
-        errorMessage: error.message,
+        errorMessage: sanitizedErrorMessage,
         executionTimeMs: executionTime,
         context,
+        metadata: {
+          originalErrorType: error.constructor?.name,
+          errorSanitized: rawErrorMessage !== sanitizedErrorMessage,
+        },
       });
 
-      throw error;
+      // 필터링된 에러 메시지만 사용자에게 전달
+      const safeError = new Error(sanitizedErrorMessage);
+      (safeError as any).originalError = error;
+      throw safeError;
     }
   }
 

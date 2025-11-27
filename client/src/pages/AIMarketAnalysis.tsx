@@ -169,7 +169,17 @@ const AIMarketAnalysis: React.FC = () => {
       const eventsResponse = await apiRequest('POST', '/api/ai-market-analysis/extract-events', {
         newsData: newsResult.data || []
       });
-      const eventsResult = await eventsResponse.json();
+      
+      const eventsContentType = eventsResponse.headers.get('content-type') || '';
+      let eventsResult;
+      
+      if (eventsContentType.includes('application/json')) {
+        eventsResult = await eventsResponse.json();
+      } else {
+        const htmlText = await eventsResponse.text();
+        console.error('HTML Response in extract-events:', htmlText.substring(0, 500));
+        throw new Error('서버가 JSON 대신 HTML을 반환했습니다. 서버 오류일 수 있습니다.');
+      }
       
       if (!eventsResult.success) {
         throw new Error(eventsResult.message || '주요이벤트 추출에 실패했습니다.');
@@ -187,7 +197,17 @@ const AIMarketAnalysis: React.FC = () => {
       updateStepStatus('generate-themes', 'running', 0);
       setCurrentStep('generate-themes');
       const themesResponse = await apiRequest('POST', '/api/ai-market-analysis/generate-themes', {});
-      const themesResult = await themesResponse.json();
+      
+      const themesContentType = themesResponse.headers.get('content-type') || '';
+      let themesResult;
+      
+      if (themesContentType.includes('application/json')) {
+        themesResult = await themesResponse.json();
+      } else {
+        const htmlText = await themesResponse.text();
+        console.error('HTML Response in generate-themes:', htmlText.substring(0, 500));
+        throw new Error('서버가 JSON 대신 HTML을 반환했습니다. 서버 오류일 수 있습니다.');
+      }
       
       if (!themesResult.success) {
         throw new Error(themesResult.message || '테마 시황 생성에 실패했습니다.');
@@ -205,7 +225,17 @@ const AIMarketAnalysis: React.FC = () => {
       updateStepStatus('generate-macro', 'running', 0);
       setCurrentStep('generate-macro');
       const macroResponse = await apiRequest('POST', '/api/ai-market-analysis/generate-macro', {});
-      const macroResult = await macroResponse.json();
+      
+      const macroContentType = macroResponse.headers.get('content-type') || '';
+      let macroResult;
+      
+      if (macroContentType.includes('application/json')) {
+        macroResult = await macroResponse.json();
+      } else {
+        const htmlText = await macroResponse.text();
+        console.error('HTML Response in generate-macro:', htmlText.substring(0, 500));
+        throw new Error('서버가 JSON 대신 HTML을 반환했습니다. 서버 오류일 수 있습니다.');
+      }
       
       if (!macroResult.success) {
         throw new Error(macroResult.message || '매크로 시황 생성에 실패했습니다.');
@@ -308,11 +338,36 @@ const AIMarketAnalysis: React.FC = () => {
       const response = await apiRequest('POST', endpoint, body);
 
       if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ message: 'Unknown error' }));
-        throw new Error(errorData.message || `${stepId} 실행에 실패했습니다.`);
+        // 응답이 HTML인지 확인
+        const contentType = response.headers.get('content-type') || '';
+        let errorData;
+        
+        if (contentType.includes('application/json')) {
+          errorData = await response.json().catch(() => ({ message: 'Unknown error' }));
+        } else {
+          // HTML 응답인 경우
+          const htmlText = await response.text().catch(() => 'Unknown error');
+          console.error('HTML Error Response:', htmlText.substring(0, 500));
+          errorData = { 
+            message: `서버 오류가 발생했습니다. (Status: ${response.status})`,
+            html: htmlText.substring(0, 500)
+          };
+        }
+        throw new Error(errorData.message || errorData.error || `${stepId} 실행에 실패했습니다.`);
       }
 
-      const result = await response.json();
+      // 응답이 JSON인지 확인
+      const contentType = response.headers.get('content-type') || '';
+      let result;
+      
+      if (contentType.includes('application/json')) {
+        result = await response.json();
+      } else {
+        // HTML 응답인 경우
+        const htmlText = await response.text();
+        console.error('HTML Response received:', htmlText.substring(0, 500));
+        throw new Error('서버가 JSON 대신 HTML을 반환했습니다. 서버 오류일 수 있습니다.');
+      }
       
       if (!result.success) {
         throw new Error(result.message || result.error || `${stepId} 실행에 실패했습니다.`);

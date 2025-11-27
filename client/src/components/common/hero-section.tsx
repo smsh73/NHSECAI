@@ -80,45 +80,39 @@ export const HeroSection = memo(function HeroSection() {
 
   return (
     <section 
-      className="relative overflow-hidden bg-background border-b py-16"
+      className="bg-background border-b py-12"
       aria-label="홈 히어로 섹션"
     >
-      {/* Clean minimal background */}
-      <div className="absolute inset-0">
-        <div className="absolute top-20 right-20 w-64 h-64 bg-primary/5 rounded-full blur-3xl" />
-        <div className="absolute bottom-20 left-20 w-80 h-80 bg-muted/30 rounded-full blur-3xl" />
-      </div>
-
       {/* Content */}
-      <div className="container mx-auto px-6 relative z-10">
+      <div className="container mx-auto px-6">
         <div className="flex flex-col items-center justify-center text-center space-y-6">
-          <h1 className="text-4xl md:text-5xl font-bold text-foreground">
+          <h1 className="text-3xl md:text-4xl font-semibold text-foreground">
             NHQV AI 시황생성 플랫폼
           </h1>
-          <p className="text-lg md:text-xl text-muted-foreground max-w-2xl">
+          <p className="text-base md:text-lg text-muted-foreground max-w-2xl">
             AI 기반 금융 시장 분석 및 시황 생성 플랫폼입니다
           </p>
-          <div className="flex items-center gap-4 pt-4">
+          <div className="flex items-center gap-3 pt-4">
             <Button 
               onClick={handleGenerateMarketAnalysis}
               disabled={isGenerating || generateMarketAnalysisMutation.isPending}
-              size="lg"
-              className="gap-2"
+              size="default"
+              className="h-10 px-6"
             >
               {isGenerating || generateMarketAnalysisMutation.isPending ? (
                 <>
-                  <Loader2 className="w-5 h-5 animate-spin" />
+                  <Loader2 className="w-4 h-4 mr-2" />
                   시황 생성 중...
                 </>
               ) : (
                 <>
-                  <Sparkles className="w-5 h-5" />
+                  <Sparkles className="w-4 h-4 mr-2" />
                   AI시황생성시작
                 </>
               )}
             </Button>
             <Link href="/ai-market-analysis">
-              <Button variant="outline" size="lg">
+              <Button variant="outline" size="default" className="h-10 px-6">
                 시황 생성 테스트
               </Button>
             </Link>

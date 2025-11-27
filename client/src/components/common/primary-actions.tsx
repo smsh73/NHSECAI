@@ -80,9 +80,8 @@ const ActionCard = memo(function ActionCard({ action }: { action: PrimaryAction 
       <Link href={path}>
         <Card 
           className={cn(
-            "relative cursor-pointer transition-all duration-300 h-full",
-            "hover:shadow-lg hover:-translate-y-0.5",
-            "bg-card border border-black/10 dark:border-white/10",
+            "relative cursor-pointer h-full",
+            "bg-card border",
             "focus-within:ring-2 focus-within:ring-primary focus-within:ring-offset-2"
           )}
           role="article"
@@ -150,15 +149,15 @@ const ActionCard = memo(function ActionCard({ action }: { action: PrimaryAction 
               </div>
 
               {/* Footer */}
-              <div className="flex items-center justify-between pt-4 border-t border-black/10 dark:border-white/10">
+              <div className="flex items-center justify-between pt-4 border-t">
                 <Button 
                   variant="ghost" 
                   size="sm"
-                  className="p-0 h-auto text-primary hover:text-primary/80 group-hover:gap-2 gap-1 transition-all"
+                  className="h-8 px-2 text-primary"
                   data-testid={`button-${title.replace(/\s+/g, '-').toLowerCase()}`}
                 >
                   시작하기
-                  <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+                  <ArrowRight className="w-4 h-4 ml-1" />
                 </Button>
                 
                 {priority === 'high' && (
@@ -217,11 +216,9 @@ export const PrimaryActions = memo(function PrimaryActions({ className }: Primar
           </div>
           
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {highPriorityActions.map((action, index) => (
+            {highPriorityActions.map((action) => (
               <div 
                 key={action.title}
-                className="animate-fade-in"
-                style={{ animationDelay: `${index * 100}ms` }}
                 data-testid={`action-card-${action.title.replace(/\s+/g, '-').toLowerCase()}`}
               >
                 <ActionCard action={action} />
@@ -237,11 +234,9 @@ export const PrimaryActions = memo(function PrimaryActions({ className }: Primar
           </h3>
           
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {mediumPriorityActions.map((action, index) => (
+            {mediumPriorityActions.map((action) => (
               <div 
                 key={action.title}
-                className="animate-fade-in"
-                style={{ animationDelay: `${(index + highPriorityActions.length) * 100}ms` }}
                 data-testid={`action-card-${action.title.replace(/\s+/g, '-').toLowerCase()}`}
               >
                 <ActionCard action={action} />

@@ -565,20 +565,20 @@ export function FinancialChatbot() {
   };
 
   return (
-    <div className="w-full min-h-screen bg-gradient-to-b from-background to-muted/20" data-testid="financial-chatbot-page">
+    <div className="w-full min-h-screen bg-background" data-testid="financial-chatbot-page">
       <div className="max-w-6xl mx-auto px-4 py-6">
         <div className="mb-6 text-center">
-          <h1 className="text-4xl font-bold text-foreground mb-2" data-testid="text-page-title">
+          <h1 className="text-3xl font-semibold text-foreground mb-2" data-testid="text-page-title">
             금융 AI 어시스턴트
           </h1>
-          <p className="text-muted-foreground text-lg">
+          <p className="text-muted-foreground text-base">
             금융 용어 설명, 시장 분석, 투자 정보 등을 AI와 대화를 통해 알아보세요
           </p>
-          <div className="flex items-center justify-center mt-3 space-x-4">
-            <Badge variant={isConnected ? "default" : "destructive"} data-testid="status-websocket" className="px-3 py-1">
+          <div className="flex items-center justify-center mt-3 space-x-3">
+            <Badge variant={isConnected ? "default" : "destructive"} data-testid="status-websocket" className="h-6 px-2">
               {isConnected ? "실시간 연결됨" : "연결 끊김"}
             </Badge>
-            <Badge variant="secondary" data-testid="status-model" className="px-3 py-1">GPT-4o-mini</Badge>
+            <Badge variant="secondary" data-testid="status-model" className="h-6 px-2">GPT-4o-mini</Badge>
           </div>
         </div>
 
@@ -657,11 +657,11 @@ export function FinancialChatbot() {
 
         {/* Chat Interface */}
         <div className="lg:col-span-3">
-          <Card className="h-[calc(100vh-200px)] flex flex-col shadow-xl border-2">
-            <CardHeader className="flex-shrink-0 border-b bg-gradient-to-r from-primary/5 to-primary/10">
+          <Card className="h-[calc(100vh-200px)] flex flex-col border">
+            <CardHeader className="flex-shrink-0 border-b">
               <CardTitle className="flex items-center justify-between">
                 <div className="flex items-center space-x-3">
-                  <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
+                  <div className="w-10 h-10 rounded bg-primary/10 flex items-center justify-center">
                     <Bot className="w-5 h-5 text-primary" />
                   </div>
                   <div>
@@ -677,7 +677,7 @@ export function FinancialChatbot() {
               </CardTitle>
             </CardHeader>
             
-            <CardContent className="flex-1 flex flex-col p-0 min-h-0 bg-gradient-to-b from-background to-muted/30">
+            <CardContent className="flex-1 flex flex-col p-0 min-h-0">
               {/* Messages Area */}
               <div 
                 className="flex-1 p-6 overflow-y-auto overflow-x-hidden"
@@ -692,14 +692,14 @@ export function FinancialChatbot() {
               >
                 {messages.length === 0 && !isStreaming ? (
                   <div className="text-center text-muted-foreground py-16">
-                    <div className="w-20 h-20 mx-auto mb-6 rounded-full bg-gradient-to-br from-primary/20 to-primary/5 flex items-center justify-center">
-                      <Bot className="w-10 h-10 text-primary" />
+                    <div className="w-16 h-16 mx-auto mb-6 rounded bg-primary/10 flex items-center justify-center">
+                      <Bot className="w-8 h-8 text-primary" />
                     </div>
                     <p className="text-2xl font-semibold mb-3 text-foreground">금융 AI 어시스턴트입니다</p>
                     <p className="text-base mb-6 max-w-md mx-auto">
                       금융 용어, 시장 분석, 투자 정보 등 궁금한 것을 물어보세요
                     </p>
-                    <div className="mt-6 p-4 bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800 rounded-xl text-sm text-amber-800 dark:text-amber-200 max-w-md mx-auto">
+                    <div className="mt-6 p-4 bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800 rounded text-sm text-amber-800 dark:text-amber-200 max-w-md mx-auto">
                       <AlertCircle className="w-5 h-5 inline mr-2" />
                       모든 정보는 참고용이며, 투자 결정은 개인의 책임입니다.
                     </div>
@@ -728,18 +728,18 @@ export function FinancialChatbot() {
                         >
                           {message.role === 'assistant' && (
                             <div className="flex items-center gap-3 mb-1">
-                              <div className="w-9 h-9 rounded-full bg-gradient-to-br from-primary/20 to-primary/5 flex items-center justify-center flex-shrink-0 shadow-sm">
-                                <Bot className="w-5 h-5 text-primary" />
+                              <div className="w-8 h-8 rounded bg-primary/10 flex items-center justify-center flex-shrink-0">
+                                <Bot className="w-4 h-4 text-primary" />
                               </div>
                               <span className="text-xs font-medium text-muted-foreground">AI 어시스턴트</span>
                             </div>
                           )}
                           <div
                             className={cn(
-                              "rounded-2xl px-5 py-4 text-sm shadow-sm transition-all",
+                              "rounded px-4 py-3 text-sm",
                               message.role === 'user'
-                                ? "bg-gradient-to-br from-primary to-primary/90 text-primary-foreground max-w-[75%] rounded-br-md"
-                                : "bg-white dark:bg-gray-800 border border-border/50 max-w-full rounded-bl-md"
+                                ? "bg-primary text-primary-foreground max-w-[75%]"
+                                : "bg-background border max-w-full"
                             )}
                           >
                             {message.id.startsWith('streaming-') && isStreaming ? (
@@ -750,7 +750,7 @@ export function FinancialChatbot() {
                                     __html: formatMessage(displayContent) 
                                   }}
                                 />
-                                <span className="inline-block w-2 h-4 bg-primary animate-pulse rounded" />
+                                <span className="inline-block w-2 h-4 bg-primary rounded" />
                               </div>
                             ) : (
                               <div 
@@ -780,7 +780,7 @@ export function FinancialChatbot() {
                                         // 검색 결과 상세 보기 (향후 구현)
                                       }}
                                     >
-                                      <div className="flex-shrink-0 w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-xs font-semibold text-primary">
+                                      <div className="flex-shrink-0 w-8 h-8 rounded bg-primary/10 flex items-center justify-center text-xs font-semibold text-primary">
                                         {index + 1}
                                       </div>
                                       <div className="flex-1 min-w-0 space-y-1.5">
@@ -823,7 +823,7 @@ export function FinancialChatbot() {
                             {message.tools && message.tools.length > 0 && (
                               <div className="mt-3 space-y-2">
                                 <div className="text-xs font-medium text-muted-foreground border-t pt-2">
-                                  📊 활용된 도구:
+                                  활용된 도구:
                                 </div>
                                 {message.tools.map((tool, index) => (
                                   <div key={index} className="text-xs bg-background/50 rounded p-2">
@@ -883,8 +883,8 @@ export function FinancialChatbot() {
                           {message.role === 'user' && (
                             <div className="flex items-center gap-3 mb-1 justify-end">
                               <span className="text-xs font-medium text-muted-foreground">사용자</span>
-                              <div className="w-9 h-9 rounded-full bg-gradient-to-br from-secondary to-secondary/80 flex items-center justify-center flex-shrink-0 shadow-sm">
-                                <User className="w-5 h-5" />
+                              <div className="w-8 h-8 rounded bg-secondary/10 flex items-center justify-center flex-shrink-0">
+                                <User className="w-4 h-4" />
                               </div>
                             </div>
                           )}
@@ -892,21 +892,21 @@ export function FinancialChatbot() {
                       );
                     })}
                     
-                    {/* Loading indicator for initial request - Perplexity Style */}
+                    {/* Loading indicator for initial request */}
                     {sendMessageMutation.isPending && !isStreaming && !messages.some(m => m.id.startsWith('streaming-')) && (
                       <div className="flex flex-col gap-3">
                         <div className="flex items-center gap-3 mb-1">
-                          <div className="w-9 h-9 rounded-full bg-gradient-to-br from-primary/20 to-primary/5 flex items-center justify-center flex-shrink-0 shadow-sm">
-                            <Bot className="w-5 h-5 text-primary" />
+                          <div className="w-8 h-8 rounded bg-primary/10 flex items-center justify-center flex-shrink-0">
+                            <Bot className="w-4 h-4 text-primary" />
                           </div>
                           <span className="text-xs font-medium text-muted-foreground">AI 어시스턴트</span>
                         </div>
-                        <div className="bg-white dark:bg-gray-800 border border-border/50 rounded-2xl rounded-bl-md px-5 py-4 shadow-sm">
+                        <div className="bg-background border rounded px-4 py-3">
                           <div className="flex items-center gap-3">
                             <div className="flex space-x-1.5">
-                              <div className="w-2 h-2 bg-primary rounded-full animate-bounce" style={{ animationDelay: '0s' }} />
-                              <div className="w-2 h-2 bg-primary rounded-full animate-bounce" style={{ animationDelay: '0.2s' }} />
-                              <div className="w-2 h-2 bg-primary rounded-full animate-bounce" style={{ animationDelay: '0.4s' }} />
+                              <div className="w-2 h-2 bg-primary rounded-full opacity-60" />
+                              <div className="w-2 h-2 bg-primary rounded-full opacity-80" />
+                              <div className="w-2 h-2 bg-primary rounded-full" />
                             </div>
                             <span className="text-sm text-muted-foreground">AI가 답변을 생성하고 있습니다...</span>
                           </div>
@@ -917,8 +917,8 @@ export function FinancialChatbot() {
                 )}
               </div>
 
-              {/* Input Area - Perplexity Style */}
-              <div className="border-t border-border/50 bg-background/50 backdrop-blur-sm p-4">
+              {/* Input Area */}
+              <div className="border-t p-4">
                 <div className="max-w-4xl mx-auto">
                   <div className="relative flex items-end gap-3">
                     <div className="flex-1 relative">
@@ -935,7 +935,7 @@ export function FinancialChatbot() {
                         placeholder="금융 관련 질문을 입력하세요..."
                         disabled={sendMessageMutation.isPending}
                         data-testid="input-chat-message"
-                        className="min-h-[60px] max-h-[200px] resize-none pr-12 text-base rounded-2xl border-2 focus:border-primary shadow-sm"
+                        className="min-h-[60px] max-h-[200px] resize-none pr-12 text-sm rounded border focus:border-primary"
                         rows={1}
                       />
                       <div className="absolute bottom-3 right-3 flex items-center gap-2">
@@ -949,12 +949,12 @@ export function FinancialChatbot() {
                       disabled={!inputMessage.trim() || sendMessageMutation.isPending}
                       data-testid="button-send-message"
                       size="lg"
-                      className="h-[60px] w-[60px] rounded-full shadow-lg hover:shadow-xl transition-shadow"
+                      className="h-12 w-12 rounded"
                     >
                       {sendMessageMutation.isPending ? (
-                        <RefreshCw className="w-5 h-5 animate-spin" />
+                        <RefreshCw className="w-4 h-4" />
                       ) : (
-                        <Send className="w-5 h-5" />
+                        <Send className="w-4 h-4" />
                       )}
                     </Button>
                   </div>
